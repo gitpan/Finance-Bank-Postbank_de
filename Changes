@@ -1,0 +1,10 @@
+Revision history for Perl extension Finance::Bank::Postbank_de.
+
+0.02 20030123
+  - Added checking for https capability of LWP to all tests
+  - Name change from Finance::Bank::Postbank to Finance::Bank::Postbank_de due to 
+    conflicting different bank in the netherlands with the same name
+
+0.01  Sat Jan 11 12:28:10 2003
+  - original version; created by h2xs 1.21 with options
+    -X Finance::Bank::Postbank

@@ -1,0 +1,31 @@
+Finance/Bank/Postbank_de version 0.02
+==================================
+
+This is a module faciliating access to the german
+Postbank online banking website at https://banking.postbank.de.
+It has been renamed from Finance::Bank::Postbank, as there
+also is a netherlands Postbank at http://www.postbank.nl,
+which is not related.
+
+INSTALLATION
+
+To install this module type the following:
+
+   perl Makefile.PL
+   make
+   make test
+   make install
+
+DEPENDENCIES
+
+This module requires these other modules and libraries:
+
+  WWW::Mechanize
+
+  an SSL module for LWP
+
+COPYRIGHT AND LICENCE
+
+This module may be used under the same terms as Perl itself.
+
+Copyright (C) 2003 Max Maischein <corion@cpan.org>
