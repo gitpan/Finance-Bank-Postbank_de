@@ -1,8 +1,16 @@
 Revision history for Perl extension Finance::Bank::Postbank_de.
 
+0.04 20030204
+  - Revamped tests to include the examples
+  - Examples use List::Sliding::Changes
+
+0.03 20030126
+  - Updated dependencies of the test files in Makefile.PL
+  - Different handling of EOL for better compatibility with Unix
+
 0.02 20030123
   - Added checking for https capability of LWP to all tests
-  - Name change from Finance::Bank::Postbank to Finance::Bank::Postbank_de due to 
+  - Name change from Finance::Bank::Postbank to Finance::Bank::Postbank_de due to
     conflicting different bank in the netherlands with the same name
 
 0.01  Sat Jan 11 12:28:10 2003

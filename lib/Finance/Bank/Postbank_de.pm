@@ -10,7 +10,7 @@ use Finance::Bank::Postbank_de::Account;
 
 use vars qw[ $VERSION ];
 
-$VERSION = '0.02';
+$VERSION = '0.04';
 
 BEGIN {
   Finance::Bank::Postbank_de->mk_accessors(qw( agent ));
@@ -184,6 +184,7 @@ Finance::Bank::Postbank_de - Check your Postbank.de bank account from Perl
 
 =head1 SYNOPSIS
 
+=for example begin
   use strict;
   use Finance::Bank::Postbank_de;
   my $account = Finance::Bank::Postbank_de->new(
@@ -208,6 +209,7 @@ Finance::Bank::Postbank_de - Check your Postbank.de bank account from Perl
   };
 
   $account->close_session;
+=for example end
 
 =head1 DESCRIPTION
 

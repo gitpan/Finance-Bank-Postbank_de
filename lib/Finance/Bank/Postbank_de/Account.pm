@@ -3,11 +3,12 @@ package Finance::Bank::Postbank_de::Account;
 use strict;
 use warnings;
 use Carp;
+use Finance::Bank::Postbank_de;
 use base 'Class::Accessor';
 
 use vars qw[ $VERSION ];
 
-$VERSION = '0.01';
+$VERSION = '0.04';
 
 BEGIN {
   Finance::Bank::Postbank_de::Account->mk_accessors(qw( number balance balance_prev transactions ));
@@ -77,7 +78,7 @@ sub parse_statement {
   croak "Don't know what to do with empty content"
     unless $raw_statement;
 
-  my @lines = split /\n/, $raw_statement;
+  my @lines = split /\r?\n/, $raw_statement;
   croak "No valid account statement"
     unless $lines[0] eq 'Postbank Kontoauszug Girokonto';
   shift @lines;
@@ -167,6 +168,7 @@ Finance::Bank::Postbank_de::Account - Postbank bank account class
 
 =head1 SYNOPSIS
 
+=for example begin
   use strict;
   use Finance::Bank::Postbank_de;
   my $account = Finance::Bank::Postbank_de::Account->parse_statement(
@@ -179,11 +181,12 @@ Finance::Bank::Postbank_de::Account - Postbank bank account class
   print "Balance : ",$retrieved_statement->balance->[1]," EUR\n";
 
   # Output CSV for the transactions
-  for my $row ($retrieved_statement->transactions}) {
+  for my $row ($retrieved_statement->transactions) {
     print join( ";", map { $row->{$_} } (qw( date valuedate type comment receiver sender amount ))),"\n";
   };
 
   $account->close_session;
+=for example end
 
 =head1 DESCRIPTION
 
@@ -251,6 +254,65 @@ be in the format YYYYMMDD. If the line is missing, C<upto =E<gt> '99999999'>
 is assumed.
 
 =back
+
+=head2 Converting a daily download to a sequence
+
+=for example begin
+  #!/usr/bin/perl -w
+  use strict;
+
+  #use Finance::Bank::Postbank_de;
+  use Finance::Bank::Postbank_de::Account;
+  use Tie::File;
+  use SlidingList::Changes qw(find_new_elements);
+  use FindBin;
+  use MIME::Lite;
+
+  my $filename = "$FindBin::Bin/statement.txt";
+  tie my @statement, 'Tie::File', $filename
+    or die "Couldn't tie to '$filename' : $!";
+
+  my @transactions;
+
+  # See what has happened since we last polled
+  my $retrieved_statement = Finance::Bank::Postbank_de::Account->parse_statement(
+                         number => '124415607',
+                         password => '44177',
+                );
+
+  # Output CSV for the transactions
+  for my $row (reverse @{$retrieved_statement->transactions()}) {
+    push @transactions, join( ";", map { $row->{$_} } (qw( tradedate valuedate typ
+  e comment receiver sender amount )));
+  };
+
+
+  # Find out what we did not already communicate
+  my (@new) = find_new_elements(\@statement,\@transactions);
+  if (@new) {
+    my ($body) = "<html><body><table>";
+    my ($date,$balance) = @{$retrieved_statement->balance};
+    $body .= "<b>Balance ($date) :</b> $balance<br>";
+    $body .= "<tr><th>";
+    $body .= join( "</th><th>", qw( tradedate valuedate type comment receiver send
+  er amount )). "</th></tr>";
+    for my $line (@{[@new]}) {
+      $line =~ s!;!</td><td>!g;
+      $body .= "<tr><td>$line</td></tr>\n";
+    };
+    $body .= "</body></html>";
+    MIME::Lite->new(
+                          From     =>'update.pl',
+                          To       =>'corion',
+                          Subject  =>"Account update $date",
+                          Type     =>'text/html',
+                          Encoding =>'base64',
+                          Data     => $body,)->send;
+  };
+
+  # And update our log with what we have seen
+  push @statement, @new;
+=for example end
 
 =head1 AUTHOR
 
