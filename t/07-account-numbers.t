@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 use strict;
+use File::Spec;
 use FindBin;
 
 use vars qw(@related_accounts);
@@ -8,7 +9,8 @@ BEGIN {
                           9999999999 );
 };
 
-use Test::More tests => 4 + scalar @related_accounts *2;
+use Test::More tests => 5 + scalar @related_accounts *2;
+use Test::MockObject;
 
 use_ok("Finance::Bank::Postbank_de");
 
@@ -54,4 +56,34 @@ SKIP: {
     ok($account->close_session(),"Close session");
     is($account->agent(),undef,"Agent was discarded");
   };
+};
+
+# Now also test for cases where we only have a single giro account :
+# We "simply" fake the whole way that account_numbers uses to get
+# at the actual account numbers for a login
+{
+  my $girofile = File::Spec->catfile($FindBin::Bin,'giroselection.html');
+  local *F;
+  open F, "<$girofile"
+    or die "Couldn't open file '$girofile' : $!";
+  undef $/;
+  my $content = <F>;
+  close F;
+  
+  my $account = Finance::Bank::Postbank_de->new(
+                  login => '9999999999',
+                  password => '11111',
+                  status => sub {
+                              shift;
+                              diag join " ",@_
+                                if ($_[0] eq "HTTP Code") and ($_[1] != 200)
+                                #or $_[0] ne "HTTP Code";
+                            },
+                );
+  
+  no warnings 'once';                
+  local *Finance::Bank::Postbank_de::select_function = sub {};
+  my $agent = Test::MockObject->new()->set_always('current_form',HTML::Form->parse($content,'https://banking.postbank.de'));
+  $account->agent($agent);
+  is_deeply([$account->account_numbers],["9999999999"],"Single account number works");
 };

@@ -2,28 +2,35 @@ package Finance::Bank::Postbank_de::Account;
 
 use strict;
 use warnings;
-use Carp;
+use Carp qw(croak);
+use POSIX qw(strftime);
 use Finance::Bank::Postbank_de;
 use base 'Class::Accessor';
 
 use vars qw[ $VERSION ];
 
-$VERSION = '0.05';
+$VERSION = '0.06';
 
 BEGIN {
-  Finance::Bank::Postbank_de::Account->mk_accessors(qw( number balance balance_prev transactions ));
+  Finance::Bank::Postbank_de::Account->mk_accessors(qw( number balance balance_prev  ));
 };
 
 sub new {
+  my $self = $_[0]->SUPER::new();
   my ($class,%args) = @_;
 
-  my $self = {
-    number => $args{number},
+  if (exists $args{number} and exists $args{name}) {
+    croak "If you specify both, 'name' and 'number', they must be equal"
+      unless $args{number} eq $args{name};
   };
-  bless $self, $class;
+
+  $self->number($args{number} || $args{name});
 
   $self;
 };
+
+# name is an alias for number
+sub name { shift->number(@_); };
 
 sub parse_date {
   my ($self,$date) = @_;
@@ -69,11 +76,6 @@ sub parse_statement {
 
     return Finance::Bank::Postbank_de->new( login => $login, password => $args{password} )->get_account_statement;
   };
-
-  my $start_date = $args{since} || "00000000";
-  my $end_date = $args{upto} || "99999999";
-  $start_date =~ /^\d{8}$/ or croak "Argument {since => '$start_date'} dosen't look like a date to me.";
-  $end_date =~ /^\d{8}$/ or croak "Argument {upto => '$end_date'} dosen't look like a date to me.";
 
   croak "Don't know what to do with empty content"
     unless $raw_statement;
@@ -126,7 +128,6 @@ sub parse_statement {
     amount => \&parse_amount,
   );
 
-  $self->transactions([]);
   my @transactions;
   my $line;
   for $line (@lines) {
@@ -145,19 +146,53 @@ sub parse_statement {
   };
 
   # Filter the transactions
-  $self->transactions( grep { $_->{tradedate} gt $start_date and $_->{tradedate} le $end_date } @transactions );
+  $self->{transactions} = \@transactions;
 
   $self
 };
 
-# Convenience method :
-sub transactions_today {
-  require POSIX;
-  my ($self, %args) = @_;
-  # Note that this method of calculating yesterdays date will be wrong whenever
-  # a DST change is in effect,
-  $args{since} = $args{yesterday} || POSIX::strftime("%Y%m%d",localtime(time()-24*60*60));
-  $self->parse_statement(%args);
+sub transactions {
+  my ($self,%args) = @_;
+
+  my ($start_date,$end_date);
+  if (exists $args{on}) {
+
+    croak "Options 'since'+'upto' and 'on' are incompatible"
+      if (exists $args{since} and exists $args{upto});
+    croak "Options 'since' and 'on' are incompatible"
+      if (exists $args{since});
+    croak "Options 'upto' and 'on' are incompatible"
+      if (exists $args{upto});
+    $args{on} = strftime('%Y%m%d',localtime())
+      if ($args{on} eq 'today');
+    $args{on} =~ /^\d{8}$/ or croak "Argument {on => '$args{on}'} dosen't look like a date to me.";
+
+    $start_date = $args{on} -1;
+    $end_date = $args{on};
+  } else {
+    $start_date = $args{since} || "00000000";
+    $end_date = $args{upto} || "99999999";
+    $start_date =~ /^\d{8}$/ or croak "Argument {since => '$start_date'} dosen't look like a date to me.";
+    $end_date =~ /^\d{8}$/ or croak "Argument {upto => '$end_date'} dosen't look like a date to me.";
+    $start_date < $end_date or croak "The 'since' argument must be less than the 'upto' argument";
+  };
+
+  # Filter the transactions
+  grep { $_->{tradedate} > $start_date and $_->{tradedate} <= $end_date } @{$self->{transactions}};
+};
+
+sub value_dates {
+  my ($self) = @_;
+  my %dates;
+  $dates{$_->{valuedate}} = 1 for $self->transactions();
+  sort keys %dates;
+};
+
+sub trade_dates {
+  my ($self) = @_;
+  my %dates;
+  $dates{$_->{tradedate}} = 1 for $self->transactions();
+  sort keys %dates;
 };
 
 1;
@@ -168,7 +203,8 @@ Finance::Bank::Postbank_de::Account - Postbank bank account class
 
 =head1 SYNOPSIS
 
-=for example begin
+=begin example
+
   use strict;
   use Finance::Bank::Postbank_de;
   my $account = Finance::Bank::Postbank_de::Account->parse_statement(
@@ -186,7 +222,8 @@ Finance::Bank::Postbank_de::Account - Postbank bank account class
   };
 
   $account->close_session;
-=for example end
+
+=end example
 
 =head1 DESCRIPTION
 
@@ -241,6 +278,18 @@ Parses the file C<$filename> instead of downloading data from the web.
 
 Parses the content of C<$string>  instead of downloading data from the web.
 
+=back
+
+=head2 $account->transactions %ARGS
+
+Delivers you all transactions within a statement. The transactions may be filtered
+by date by specifying the parameters 'since', 'upto' or 'on'. The values are, as always,
+8-digit strings denoting YYYYMMDD dates.
+
+Parameters :
+
+=over 4
+
 =item since => $date
 
 Removes all transactions that happened on or before $date. $date must
@@ -253,11 +302,30 @@ Removes all transactions that happened after $date. $date must
 be in the format YYYYMMDD. If the line is missing, C<upto =E<gt> '99999999'>
 is assumed.
 
+=item on => $date
+
+Removes all transactions that happened on a date that is not C<eq> to $date. $date must
+be in the format YYYYMMDD. $date may also be the special string 'today', which will
+be converted to a YYYYMMDD string corresponding to todays date.
+
 =back
+
+=head2 $account->value_dates
+
+C<value_dates> is a convenience method that returns all value dates on the account statement.
+
+=cut
+
+=head2 $account->trade_dates
+
+C<trade_dates> is a convenience method that returns all trade dates on the account statement.
+
+=cut
 
 =head2 Converting a daily download to a sequence
 
-=for example begin
+=begin example
+
   #!/usr/bin/perl -w
   use strict;
 
@@ -284,7 +352,6 @@ is assumed.
     push @transactions, join( ";", map { $row->{$_} } (qw( tradedate valuedate type comment receiver sender amount )));
   };
 
-
   # Find out what we did not already communicate
   my (@new) = find_new_elements(\@statement,\@transactions);
   if (@new) {
@@ -299,18 +366,19 @@ is assumed.
     };
     $body .= "</body></html>";
     MIME::Lite->new(
-                          From     =>'update.pl',
-                          To       =>'you',
-                          Subject  =>"Account update $date",
-                          Type     =>'text/html',
-                          Encoding =>'base64',
-                          Data     => $body,)->send;
+                    From     =>'update.pl',
+                    To       =>'you',
+                    Subject  =>"Account update $date",
+                    Type     =>'text/html',
+                    Encoding =>'base64',
+                    Data     => $body,
+                    )->send;
   };
 
   # And update our log with what we have seen
   push @statement, @new;
-  
-=for example end
+
+=end example
 
 =head1 AUTHOR
 

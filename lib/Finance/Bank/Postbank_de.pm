@@ -10,7 +10,7 @@ use Finance::Bank::Postbank_de::Account;
 
 use vars qw[ $VERSION ];
 
-$VERSION = '0.05';
+$VERSION = '0.06';
 
 BEGIN {
   Finance::Bank::Postbank_de->mk_accessors(qw( agent ));
@@ -94,16 +94,16 @@ sub error_page {
 
 sub maintenance {
   my ($self) = @_;
-  $self->error_page and 
+  $self->error_page and
   $self->agent->content =~ /derzeit steht das Internet Banking aufgrund von Wartungsarbeiten leider nicht zur Verf&uuml;gung.\s*<br>\s*In K&uuml;rze wird das Internet Banking wieder wie gewohnt erreichbar sein./gsm;
 };
 
 sub access_denied {
   my ($self) = @_;
   my $content = $self->agent->content;
-  
-  $self->error_page and 
-  (  $content =~ /Die eingegebene Kontonummer ist unvollst&auml;ndig oder falsch\..*\(2051\)/gsm 
+
+  $self->error_page and
+  (  $content =~ /Die eingegebene Kontonummer ist unvollst&auml;ndig oder falsch\..*\(2051\)/gsm
   or $content =~ /Die eingegebene PIN ist falsch\. Bitte geben Sie die richtige PIN ein\.\s*\(10011\)/gsm
   or $content =~ /Die von Ihnen eingegebene Kontonummer ist ung&uuml;ltig und entspricht keiner Postbank-Kontonummer.\s*\(3040\)/gsm );
 };
@@ -149,11 +149,21 @@ sub account_numbers {
   my ($self,%args) = @_;
   $self->log("Getting related account numbers");
   $self->select_function("accountstatement");
+
+  #local *F;
+  #open F, ">", "giroselection.html"
+  #  or die "uhoh : $!";
+  #print F $self->agent->content;
+  #close F;
   my $giro_input = $self->agent->current_form->find_input('GIROSELECTION');
   if (defined $giro_input) {
-    return ($giro_input->possible_values());
+    if ($giro_input->type eq 'hidden') {
+      ($giro_input->value())
+    } else {
+      $giro_input->possible_values()
+    };
   } else {
-    return undef;
+    return ();
   };
 };
 
@@ -206,7 +216,7 @@ Finance::Bank::Postbank_de - Check your Postbank.de bank account from Perl
 
 =head1 SYNOPSIS
 
-=for example begin
+=begin example
   use strict;
   use Finance::Bank::Postbank_de;
   my $account = Finance::Bank::Postbank_de->new(
@@ -231,7 +241,7 @@ Finance::Bank::Postbank_de - Check your Postbank.de bank account from Perl
   };
 
   $account->close_session;
-=for example end
+=end example
 
 =head1 DESCRIPTION
 

@@ -51,7 +51,8 @@ eval q{
   my $example = sub {
     local $^W = 0;
 
-#line 172 lib/Finance/Bank/Postbank_de/Account.pm
+#line 207 lib/Finance/Bank/Postbank_de/Account.pm
+
   use strict;
   use Finance::Bank::Postbank_de;
   my $account = Finance::Bank::Postbank_de::Account->parse_statement(
@@ -69,11 +70,12 @@ eval q{
   };
 
   $account->close_session;
+
 ;
 
   }
 };
-is($@, '', "example from line 172");
+is($@, '', "example from line 207");
 
 };
 SKIP: {
@@ -124,7 +126,8 @@ eval q{
   my $example = sub {
     local $^W = 0;
 
-#line 261 lib/Finance/Bank/Postbank_de/Account.pm
+#line 328 lib/Finance/Bank/Postbank_de/Account.pm
+
   #!/usr/bin/perl -w
   use strict;
 
@@ -151,7 +154,6 @@ eval q{
     push @transactions, join( ";", map { $row->{$_} } (qw( tradedate valuedate type comment receiver sender amount )));
   };
 
-
   # Find out what we did not already communicate
   my (@new) = find_new_elements(\@statement,\@transactions);
   if (@new) {
@@ -166,22 +168,23 @@ eval q{
     };
     $body .= "</body></html>";
     MIME::Lite->new(
-                          From     =>'update.pl',
-                          To       =>'you',
-                          Subject  =>"Account update $date",
-                          Type     =>'text/html',
-                          Encoding =>'base64',
-                          Data     => $body,)->send;
+                    From     =>'update.pl',
+                    To       =>'you',
+                    Subject  =>"Account update $date",
+                    Type     =>'text/html',
+                    Encoding =>'base64',
+                    Data     => $body,
+                    )->send;
   };
 
   # And update our log with what we have seen
   push @statement, @new;
-  
+
 ;
 
   }
 };
-is($@, '', "example from line 261");
+is($@, '', "example from line 328");
 
 };
 SKIP: {
