@@ -1,4 +1,4 @@
-#!D:\Programme\indigoperl-5.6\bin\perl.exe -w
+#!D:\perl\5.8.2\bin\perl.exe -w
 
 use Test::More 'no_plan';
 
@@ -20,9 +20,8 @@ sub CLOSE {}    # XXX STDERR/STDOUT.  This is not the behavior we want.
 sub READ {}
 sub READLINE {}
 sub GETC {}
-sub BINMODE {}
 
-my $Original_File = 'D:lib\Finance\Bank\Postbank_de.pm';
+my $Original_File = 'lib\Finance\Bank\Postbank_de.pm';
 
 package main;
 
@@ -31,27 +30,13 @@ $SIG{__WARN__} = sub { $main::_STDERR_ .= join '', @_; };
 tie *STDOUT, 'Catch', '_STDOUT_' or die $!;
 tie *STDERR, 'Catch', '_STDERR_' or die $!;
 
-SKIP: {
-    # A header testing whether we find all prerequisites :
-      # Check for module Finance::Bank::Postbank_de
-  eval { require Finance::Bank::Postbank_de };
-  skip "Need module Finance::Bank::Postbank_de to run this test", 1
-    if $@;
-
-  # Check for module strict
-  eval { require strict };
-  skip "Need module strict to run this test", 1
-    if $@;
-
-
-    # The original POD test
-        undef $main::_STDOUT_;
+    undef $main::_STDOUT_;
     undef $main::_STDERR_;
 eval q{
   my $example = sub {
     local $^W = 0;
 
-#line 220 lib/Finance/Bank/Postbank_de.pm
+#line 233 lib/Finance/Bank/Postbank_de.pm
 
   use strict;
   use Finance::Bank::Postbank_de;
@@ -87,27 +72,12 @@ eval q{
 
   }
 };
-is($@, '', "example from line 220");
+is($@, '', "example from line 233");
 
-};
-SKIP: {
-    # A header testing whether we find all prerequisites :
-      # Check for module Finance::Bank::Postbank_de
-  eval { require Finance::Bank::Postbank_de };
-  skip "Need module Finance::Bank::Postbank_de to run this test", 1
-    if $@;
-
-  # Check for module strict
-  eval { require strict };
-  skip "Need module strict to run this test", 1
-    if $@;
-
-
-    # The original POD test
-    {
+{
     undef $main::_STDOUT_;
     undef $main::_STDERR_;
-#line 220 lib/Finance/Bank/Postbank_de.pm
+#line 233 lib/Finance/Bank/Postbank_de.pm
 
   use strict;
   use Finance::Bank::Postbank_de;
@@ -142,7 +112,8 @@ SKIP: {
   isa_ok($account,"Finance::Bank::Postbank_de");
   isa_ok($retrieved_statement,"Finance::Bank::Postbank_de::Account");
   $::_STDOUT_ =~ s!^Statement date : \d{8}\n!!m;
-  is($::_STDOUT_,'New Finance::Bank::Postbank_de created
+  my $expected = <<EOX;
+New Finance::Bank::Postbank_de created
 Connecting to https://banking.postbank.de/anfang.jsp
 Logging into function ACCOUNTBALANCE
 Getting account statement (default or only one there)
@@ -160,18 +131,18 @@ Balance : 2500.00 EUR
 20030513;20030513;GUTSCHRIFT;BEZÜGE                     PERSONALNUMMER 700600170/01;ARBEITGEBER U. CO;;2780.70
 20030513;20030513;LASTSCHRIFT;MIETE 600,00 EUR           NEBENKOSTEN 250,00 EUR     OBJEKT 22/328              MUSTERPFAD 567, MUSTERSTADT;EIGENHEIM KG;;-850.00
 Closing session
-','Retrieving an account statement works');
+EOX
+  for ($::_STDOUT_,$expected) {
+    s!\r\n!!gsm;    
+    # Strip out all date references ...
+    s/^\d{8};\d{8};//gm;
+  };
+  is_deeply([split /\n/, $::_STDOUT_],[split /\n/, $expected],'Retrieving an account statement works');
 
     undef $main::_STDOUT_;
     undef $main::_STDERR_;
 }
 
-};
-SKIP: {
-    # A header testing whether we find all prerequisites :
-    
-    # The original POD test
-        undef $main::_STDOUT_;
+    undef $main::_STDOUT_;
     undef $main::_STDERR_;
 
-};

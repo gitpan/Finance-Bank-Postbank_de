@@ -1,4 +1,4 @@
-#!D:\Programme\indigoperl-5.6\bin\perl.exe -w
+#!D:\perl\5.8.2\bin\perl.exe -w
 
 use Test::More 'no_plan';
 
@@ -20,9 +20,8 @@ sub CLOSE {}    # XXX STDERR/STDOUT.  This is not the behavior we want.
 sub READ {}
 sub READLINE {}
 sub GETC {}
-sub BINMODE {}
 
-my $Original_File = 'D:lib\Finance\Bank\Postbank_de\Account.pm';
+my $Original_File = 'lib\Finance\Bank\Postbank_de\Account.pm';
 
 package main;
 
@@ -31,27 +30,13 @@ $SIG{__WARN__} = sub { $main::_STDERR_ .= join '', @_; };
 tie *STDOUT, 'Catch', '_STDOUT_' or die $!;
 tie *STDERR, 'Catch', '_STDERR_' or die $!;
 
-SKIP: {
-    # A header testing whether we find all prerequisites :
-      # Check for module Finance::Bank::Postbank_de::Account
-  eval { require Finance::Bank::Postbank_de::Account };
-  skip "Need module Finance::Bank::Postbank_de::Account to run this test", 1
-    if $@;
-
-  # Check for module strict
-  eval { require strict };
-  skip "Need module strict to run this test", 1
-    if $@;
-
-
-    # The original POD test
-        undef $main::_STDOUT_;
+    undef $main::_STDOUT_;
     undef $main::_STDERR_;
 eval q{
   my $example = sub {
     local $^W = 0;
 
-#line 207 lib/Finance/Bank/Postbank_de/Account.pm
+#line 212 lib/Finance/Bank/Postbank_de/Account.pm
 
   use strict;
   use Finance::Bank::Postbank_de::Account;
@@ -75,27 +60,12 @@ eval q{
 
   }
 };
-is($@, '', "example from line 207");
+is($@, '', "example from line 212");
 
-};
-SKIP: {
-    # A header testing whether we find all prerequisites :
-      # Check for module Finance::Bank::Postbank_de::Account
-  eval { require Finance::Bank::Postbank_de::Account };
-  skip "Need module Finance::Bank::Postbank_de::Account to run this test", 1
-    if $@;
-
-  # Check for module strict
-  eval { require strict };
-  skip "Need module strict to run this test", 1
-    if $@;
-
-
-    # The original POD test
-    {
+{
     undef $main::_STDOUT_;
     undef $main::_STDERR_;
-#line 207 lib/Finance/Bank/Postbank_de/Account.pm
+#line 212 lib/Finance/Bank/Postbank_de/Account.pm
 
   use strict;
   use Finance::Bank::Postbank_de::Account;
@@ -117,7 +87,8 @@ SKIP: {
 
   isa_ok($statement,"Finance::Bank::Postbank_de::Account");
   $::_STDOUT_ =~ s!^Statement date : \d{8}\n!!m;
-  is($::_STDOUT_,'Balance : 2500.00 EUR
+  my $expected = <<EOX;
+Balance : 2500.00 EUR
 20030520;20030520;GUTSCHRIFT;KINDERGELD                 KINDERGELD-NR 234568/133;ARBEITSAMT BONN;;154.00
 20030520;20030520;ÜBERWEISUNG;FINANZKASSE 3991234        STEUERNUMMER 007 03434     EST-VERANLAGUNG 99;FINANZAMT KÖLN-SÜD;;-328.75
 20030513;20030513;LASTSCHRIFT;RECHNUNG 03121999          BUCHUNGSKONTO 9876543210;TELEFON AG KÖLN;;-125.80
@@ -129,62 +100,28 @@ SKIP: {
 20030513;20030513;DAUER ÜBERW;DA 100001;;MUSTERMANN, HANS;-31.50
 20030513;20030513;GUTSCHRIFT;BEZÜGE                     PERSONALNUMMER 700600170/01;ARBEITGEBER U. CO;;2780.70
 20030513;20030513;LASTSCHRIFT;MIETE 600,00 EUR           NEBENKOSTEN 250,00 EUR     OBJEKT 22/328              MUSTERPFAD 567, MUSTERSTADT;EIGENHEIM KG;;-850.00
-',"Retrieved the correct data");
+EOX
+  for ($::_STDOUT_,$expected) {
+    s!\r\n!!gsm;
+    # Strip out all date references ...
+    s/^\d{8};\d{8};//gm;
+  };
+  is_deeply([split /\n/, $::_STDOUT_],[split /\n/, $expected],"Retrieved the correct data");
 
     undef $main::_STDOUT_;
     undef $main::_STDERR_;
 }
 
-};
-SKIP: {
-    # A header testing whether we find all prerequisites :
-    
-    # The original POD test
-        undef $main::_STDOUT_;
+    undef $main::_STDOUT_;
     undef $main::_STDERR_;
 
-};
-SKIP: {
-    # A header testing whether we find all prerequisites :
-      # Check for module Finance::Bank::Postbank_de::Account
-  eval { require Finance::Bank::Postbank_de::Account };
-  skip "Need module Finance::Bank::Postbank_de::Account to run this test", 1
-    if $@;
-
-  # Check for module FindBin
-  eval { require FindBin };
-  skip "Need module FindBin to run this test", 1
-    if $@;
-
-  # Check for module List::Sliding::Changes
-  eval { require List::Sliding::Changes };
-  skip "Need module List::Sliding::Changes to run this test", 1
-    if $@;
-
-  # Check for module MIME::Lite
-  eval { require MIME::Lite };
-  skip "Need module MIME::Lite to run this test", 1
-    if $@;
-
-  # Check for module Tie::File
-  eval { require Tie::File };
-  skip "Need module Tie::File to run this test", 1
-    if $@;
-
-  # Check for module strict
-  eval { require strict };
-  skip "Need module strict to run this test", 1
-    if $@;
-
-
-    # The original POD test
-        undef $main::_STDOUT_;
+    undef $main::_STDOUT_;
     undef $main::_STDERR_;
 eval q{
   my $example = sub {
     local $^W = 0;
 
-#line 342 lib/Finance/Bank/Postbank_de/Account.pm
+#line 360 lib/Finance/Bank/Postbank_de/Account.pm
 
   #!/usr/bin/perl -w
   use strict;
@@ -242,14 +179,8 @@ eval q{
 
   }
 };
-is($@, '', "example from line 342");
+is($@, '', "example from line 360");
 
-};
-SKIP: {
-    # A header testing whether we find all prerequisites :
-    
-    # The original POD test
-        undef $main::_STDOUT_;
+    undef $main::_STDOUT_;
     undef $main::_STDERR_;
 
-};

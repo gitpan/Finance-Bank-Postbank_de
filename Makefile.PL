@@ -18,6 +18,7 @@ WriteMakefile(
                         'Test::More' => 0,
                         'Test::MockObject' => 0,
                         'Class::Accessor' => 0,
+                        'MIME::Lite' => 3.00,
                       }, # e.g., Module::Name => 1.1
     ($] >= 5.005 ?    ## Add these new keywords supported since 5.005
       (ABSTRACT_FROM => 'lib/Finance/Bank/Postbank_de.pm', # retrieve abstract from module
@@ -28,12 +29,16 @@ WriteMakefile(
 
 # Now check whether we can create the synopsis inline tests
 use vars qw($have_test_inline);
+use vars qw($have_test_inline);
 BEGIN {
   eval { require Test::Inline;
-         $have_test_inline = 1; };
+         $have_test_inline = $Test::Inline::VERSION ge '0.15_001'; };
   undef $@;
-  print "Test::Inline is nice for testing the examples, but not necessary\n"
-    unless $have_test_inline;
+  if ($have_test_inline) {
+    print "Good - you have a patched Test::Inline\n";
+  } else {
+    print "Test::Inline 0.15_001 is nice for testing the examples, but not necessary\n"
+  };
 };
 BEGIN {
   eval { require List::Sliding::Changes };

@@ -9,10 +9,10 @@ use base 'Class::Accessor';
 
 use vars qw[ $VERSION ];
 
-$VERSION = '0.07';
+$VERSION = '0.08';
 
 BEGIN {
-  Finance::Bank::Postbank_de::Account->mk_accessors(qw( number balance balance_prev  ));
+  Finance::Bank::Postbank_de::Account->mk_accessors(qw( number balance balance_prev iban ));
 };
 
 sub new {
@@ -99,7 +99,12 @@ sub parse_statement {
     unless $num;
   shift @lines;
 
+  # Collect the IBAN:
+  $lines[0] =~ /IBAN (DE\d\d \d\d\d\d \d\d\d\d \d\d\d\d \d\d\d\d \d\d)/
+    or croak "No IBAN found in account statement ($lines[0])";
+  $self->{iban} = $1;
   shift @lines;
+
   $lines[0] =~ /^Kontostand\s+Datum\s+Betrag\s+EUR$/
     or croak "No summary found in account statement ($lines[0])";
   shift @lines;
@@ -225,7 +230,8 @@ Finance::Bank::Postbank_de::Account - Postbank bank account class
 =for example_testing
   isa_ok($statement,"Finance::Bank::Postbank_de::Account");
   $::_STDOUT_ =~ s!^Statement date : \d{8}\n!!m;
-  is($::_STDOUT_,'Balance : 2500.00 EUR
+  my $expected = <<EOX;
+Balance : 2500.00 EUR
 20030520;20030520;GUTSCHRIFT;KINDERGELD                 KINDERGELD-NR 234568/133;ARBEITSAMT BONN;;154.00
 20030520;20030520;ÜBERWEISUNG;FINANZKASSE 3991234        STEUERNUMMER 007 03434     EST-VERANLAGUNG 99;FINANZAMT KÖLN-SÜD;;-328.75
 20030513;20030513;LASTSCHRIFT;RECHNUNG 03121999          BUCHUNGSKONTO 9876543210;TELEFON AG KÖLN;;-125.80
@@ -237,7 +243,13 @@ Finance::Bank::Postbank_de::Account - Postbank bank account class
 20030513;20030513;DAUER ÜBERW;DA 100001;;MUSTERMANN, HANS;-31.50
 20030513;20030513;GUTSCHRIFT;BEZÜGE                     PERSONALNUMMER 700600170/01;ARBEITGEBER U. CO;;2780.70
 20030513;20030513;LASTSCHRIFT;MIETE 600,00 EUR           NEBENKOSTEN 250,00 EUR     OBJEKT 22/328              MUSTERPFAD 567, MUSTERSTADT;EIGENHEIM KG;;-850.00
-',"Retrieved the correct data");
+EOX
+  for ($::_STDOUT_,$expected) {
+    s!\r\n!!gsm;
+    # Strip out all date references ...
+    s/^\d{8};\d{8};//gm;
+  };
+  is_deeply([split /\n/, $::_STDOUT_],[split /\n/, $expected],"Retrieved the correct data");
 
 =head1 DESCRIPTION
 
@@ -293,6 +305,12 @@ Parses the file C<$filename> instead of downloading data from the web.
 Parses the content of C<$string>  instead of downloading data from the web.
 
 =back
+
+=head2 $account->iban
+
+Returns the IBAN for the account as a string. Later, a move to L<Business::IBAN> is
+planned. The IBAN is a unique identifier for every account, that identifies the country,
+bank and account with that bank.
 
 =head2 $account->transactions %ARGS
 
