@@ -2,18 +2,20 @@
 use strict;
 use FindBin;
 
+require 't/test_form.pm';
+
 use vars qw(@fields);
 BEGIN {
-  @fields = qw(GIROSELECTION CHOICE SUBMIT);
+  @fields = qw(konto zeitraum tage action);
 };
-use Test::More tests => 7 + scalar @fields;
+use Test::More tests => 8;
 
 use_ok("Finance::Bank::Postbank_de");
 
 # Check that we have SSL installed :
 SKIP: {
 
-  skip "Need SSL capability to access the website", 6 + scalar @fields
+  skip "Need SSL capability to access the website", 3 + scalar @fields
     unless LWP::Protocol::implementor('https');
 
   my $account = Finance::Bank::Postbank_de->new(
@@ -33,7 +35,7 @@ SKIP: {
   SKIP: {
     unless ($status == 200) {
       diag $account->agent->res->as_string;
-      skip "Didn't get a connection to ".&Finance::Bank::Postbank_de::LOGIN."(LWP: $status)", 9;
+      skip "Didn't get a connection to ".&Finance::Bank::Postbank_de::LOGIN."(LWP: $status)", 7;
     };
     skip "Banking is unavailable due to maintenance", 9
       if $account->maintenance;
@@ -46,14 +48,7 @@ SKIP: {
       skip "Couldn't get to account statement (LWP: $status)",5;
     };
 
-    # Check that the expected form fields are available :
-    my $field;
-    for $field (@fields) {
-      unless (defined $account->agent->current_form->find_input($field)) {
-        diag $account->agent->current_form->inputs;
-      };
-      ok(defined $account->agent->current_form->find_input($field),"ACCOUNTSTATEMENT form has field '$field'");
-    };
+    form_ok( $account->agent, kontoumsatzForm => @fields );
     ok($account->close_session(),"Closed session");
     is($account->agent(),undef,"agent was discarded");
 
@@ -71,7 +66,7 @@ SKIP: {
       my ($fh,$tempname) = File::Temp::tempfile();
       close $fh;
       my $statement = $account->get_account_statement(file => $tempname);
-      is($statement->iban, 'DE31 2001 0020 9999 9999 99', "Got the correct IBAN");
+      is($statement->iban, 'DE31200100209999999999', "Got the correct IBAN");
 
       my $downloaded_statement = do {local $/ = undef;
                                      local *F;

@@ -10,19 +10,20 @@ use Finance::Bank::Postbank_de::Account;
 
 use vars qw[ $VERSION ];
 
-$VERSION = '0.11';
+$VERSION = '0.20';
 
 BEGIN {
-  Finance::Bank::Postbank_de->mk_accessors(qw( agent ));
+  Finance::Bank::Postbank_de->mk_accessors(qw( agent login password ));
 };
 
-#use constant LOGIN => 'https://banking.postbank.de/anfang.jsp';
-use constant LOGIN => 'https://banking-classic.postbank.de/anfang.jsp';
+use constant LOGIN => 'https://banking.postbank.de/';
+#use constant LOGIN => 'https://banking.postbank.de/iob3/welcome.do';
+#use constant LOGIN => 'https://banking-classic.postbank.de/anfang.jsp';
 use vars qw(%functions);
 BEGIN {
   %functions = (
-    quit => 'Banking beenden',
-    accountstatement => 'Kontoauszug',
+    quit		=> qr'^Banking beenden$',
+    accountstatement	=> qr'^Kontoums.*?tze$',
   );
 };
 
@@ -51,9 +52,9 @@ sub log { $_[0]->{logger}->(@_); };
 sub log_httpresult { $_[0]->log("HTTP Code",$_[0]->agent->status,$_[0]->agent->res->as_string) };
 
 sub new_session {
-  # Reset our user agent
   my ($self) = @_;
 
+  # Reset our user agent
   $self->close_session()
     if ($self->agent);
     
@@ -64,12 +65,16 @@ sub new_session {
       die "Banking unavailable due to maintenance";
     };
     my $agent = $self->agent();
-    my $function = 'ACCOUNTBALANCE';
-    $self->log("Logging into function $function");
-    $agent->current_form->value('Kontonummer',$self->{login});
-    $agent->current_form->value('PIN',$self->{password});
-    $agent->current_form->value('FUNCTION',$function);
-    $agent->click('LOGIN');
+    $agent->form("loginForm");
+    eval {
+      $agent->current_form->value( accountNumber => $self->login );
+      $agent->current_form->value( PNINumber => $self->password );
+    };
+    if ($@) {
+      warn $agent->content;
+      croak $@;
+    };
+    $agent->submit;
     $self->log_httpresult();
     $result = $agent->status;
   };
@@ -83,8 +88,6 @@ sub get_login_page {
 
   my $agent = $self->agent();
   $agent->add_header("If-SSL-Cert-Subject" => qr'/C=DE/ST=NRW/L=Bonn/O=Deutsche Postbank AG/OU=Postbank Systems AG/OU=Terms of use at www\.verisign\.com/rpa \(c\)00');
-#/C=DE/ST=NRW/L=Bonn/O=Deutsche Postbank AG/OU=Postbank Electronic Banking/OU=Terms of use
-  $agent->add_header("If-SSL-Cert-Subject" => qr'/C=DE/ST=NRW/L=Bonn/O=Deutsche Postbank AG/OU=Postbank Electronic Banking/OU=Terms of use');
 
   $agent->get(LOGIN);
   $self->log_httpresult();
@@ -95,30 +98,38 @@ sub get_login_page {
 sub error_page {
   # Check if an error page is shown (a page with much red on it)
   my ($self) = @_;
-     $self->agent->content =~ /<tr valign="top" bgcolor="#FF0033">/sm
-  # or $self->agent->content =~ /<tr valign="top" bgcolor="#FF0000">/sm;
+     $self->agent->content =~ m!<h3 class="h3Error">Es ist ein Fehler aufgetreten</h3>!sm
+  or $self->maintenance;
+};
+
+sub error_message {
+  my ($self) = @_;
+  die "No error condition detected in:\n" . $self->agent->content
+    unless $self->error_page;
+  $self->agent->content =~ m!<p class="errorText">(.*?)</p>!sm
+    or die "No error message found in:\n" . $self->agent->content;
+  $1
 };
 
 sub maintenance {
   my ($self) = @_;
-  $self->error_page and
-#  $self->agent->content =~ /derzeit steht das Internet Banking aufgrund von Wartungsarbeiten leider nicht zur Verf&uuml;gung.\s*<br>\s*In K&uuml;rze wird das Internet Banking wieder wie gewohnt erreichbar sein./gsm;
-  $self->agent->content =~ /Sehr\s+geehrte\s+Kundin,\s+sehr\s+geehrter\s+Kunde,
-                           \s+aus\s+technischen\s+Gr&uuml;nden\s+ist\s+zurzeit\s+kein\s+Online-Banking\s+m&ouml;glich.
-                           \s+Bitte\s+versuchen\s+Sie\s+es\s+sp&auml;ter\s+noch\s+einmal\.
-                           \s+Wir\s+bitten\s+um\s+Ihr\s+Verst&auml;ndnis\.
-                           \s+Mit\s+freundlichen\s+Gr&uuml;&szlig;en\s+Ihre\s+Postbank\s+\(5010\)/xgsim;
+  #$self->error_page and
+  $self->agent->content =~ m!Sehr geehrter <span lang="en">Online-Banking</span>\s+Nutzer,\s+wegen einer hohen Auslastung kommt es derzeit im Online-Banking zu\s*l&auml;ngeren Wartezeiten.!sm
+  or $self->agent->content =~ m!&nbsp;Wartung\b!;
 };
 
 sub access_denied {
   my ($self) = @_;
-  my $content = $self->agent->content;
+  if ($self->error_page) {
+    my $message = $self->error_message;
 
-  $self->error_page and
-  (  $content =~ /Die eingegebene Kontonummer ist unvollst&auml;ndig oder falsch\..*\(2051\)/gsm
-  # or $content =~ /Die eingegebene PIN ist falsch\. Bitte geben Sie die richtige PIN ein\.\s*\(10011\)/gsm
-  or $content =~ /Die eingegebene PIN ist falsch\. Bitte geben Sie die richtige PIN ein\.\s*\(9501\)/gsm
-  or $content =~ /Die von Ihnen eingegebene Kontonummer ist ung&uuml;ltig und entspricht keiner Postbank-Kontonummer.\s*\(3040\)/gsm );
+    return (
+        $message =~ m!^\s*Die Kontonummer ist nicht f.r das Internet Online-Banking freigeschaltet. Bitte verwenden Sie zur Freischaltung den Link "Internet Online-Banking freischalten".<br />\s*$!sm
+     or $message =~ m!^\s*Sie haben zu viele Zeichen in das Feld eingegeben.<br />\s*$!sm
+    )
+  } else {
+    return;
+  };
 };
 
 sub session_timed_out {
@@ -133,8 +144,10 @@ sub select_function {
 
   $self->new_session unless $self->agent;
 
-  # $self->agent->follow($functions{$function});
-  $self->agent->follow_link( text => $functions{$function});
+  $self->log( "Activating $functions{$function}" );
+  $self->agent->follow_link( text_regex => $functions{$function})
+    or do {
+    };
   if ($self->session_timed_out) {
     $self->log("Session timed out");
     $self->agent(undef);
@@ -151,7 +164,7 @@ sub close_session {
   if (not ($self->access_denied or $self->maintenance)) {
     $self->log("Closing session");
     $self->select_function('quit');
-    $result = $self->agent->res->as_string =~ /Online-Banking\s+beendet/sm;
+    $result = $self->agent->res->as_string =~ m!<p class="pHeadlineLeft"><span lang="en">Online-Banking</span> beendet</p>!sm;
   } else {
     $result = 'Never logged in';
   };
@@ -161,24 +174,31 @@ sub close_session {
 
 sub account_numbers {
   my ($self,%args) = @_;
-  $self->log("Getting related account numbers");
-  $self->select_function("accountstatement");
+  $self->{account_numbers} ||= do {
+    my @numbers;
 
-  #local *F;
-  #open F, ">", "giroselection.html"
-  #  or die "uhoh : $!";
-  #print F $self->agent->content;
-  #close F;
-  my $giro_input = $self->agent->current_form->find_input('GIROSELECTION');
-  if (defined $giro_input) {
-    if ($giro_input->type eq 'hidden') {
-      ($giro_input->value())
+    $self->log("Getting related account numbers");
+    $self->select_function("accountstatement");
+    $self->agent->form("kontoumsatzForm");
+
+    my $giro_input = $self->agent->current_form->find_input('konto');
+    if (defined $giro_input) {
+      if ($giro_input->type eq 'hidden') {
+        @numbers = $giro_input->value();
+        $self->log("Only one related account number found: @numbers");
+      } else {
+        @numbers = $giro_input->possible_values();
+        $self->log( scalar(@numbers) . " related account numbers found: @numbers");
+      };
     } else {
-      $giro_input->possible_values()
+      $self->log("No related account numbers found");
     };
-  } else {
-    return ();
+
+    # Discard credit card numbers:
+    @numbers = grep /^\d+$/, @numbers;
+    \@numbers
   };
+  @{ $self->{account_numbers} };
 };
 
 sub get_account_statement {
@@ -188,36 +208,28 @@ sub get_account_statement {
 
   my $agent = $self->agent();
 
+  $self->agent->form("kontoumsatzForm");
   if (exists $args{account_number}) {
     $self->log("Getting account statement for $args{account_number}");
-    # die $agent->content unless $agent->current_form;
-    $agent->current_form->value('GIROSELECTION', delete $args{account_number});
+    $agent->current_form->param( konto => [ delete $args{account_number}]);
   } else {
-    $self->log("Getting account statement (default or only one there)");
+    my @accounts = $agent->current_form->value('konto');
+    $self->log("Getting account statement via default (@accounts)");
   };
 
-  $agent->current_form->value('CHOICE','COMPLETE');
-  $agent->click('SUBMIT');
-  $self->log("Downloading print version");
+  $agent->current_form->value('zeitraum','tage');
+  $agent->current_form->param('tage',['90']);
+  $self->log("Downloading text version");
+  $agent->click('action');
 
-  # find the form with the "DOWNLOAD" button:
-  my @forms = $agent->forms;
-  my $download_action = 0;
-  for my $form ($agent->forms) {
-    $download_action++;
-    last if $form->find_input( 'DOWNLOAD', 'image' );
-  };
-  if (! $download_action) {
-    warn $agent->content;
-    croak "Couldn't find a button named 'DOWNLOAD'";
+  if ($agent->find_link(text_regex => qr'Download Kontoums.*?tze')) {
+    $agent->follow_link(text_regex => qr'Download Kontoums.*?tze');
+    $self->log_httpresult();
   } else {
-    #$self->log("Download form is form number $download_action");
+    # keine Umsaetze
+    $self->log("No transactions found");
+    return ();
   };
-  
-  $agent->form($download_action);
-  $agent->click('DOWNLOAD');
-
-  $self->log_httpresult();
 
   if ($args{file}) {
     $self->log("Saving to $args{file}");
@@ -232,6 +244,7 @@ sub get_account_statement {
 
   if ($agent->status == 200) {
     my $result = $agent->content;
+    #warn $result;
     $agent->back;
     return Finance::Bank::Postbank_de::Account->parse_statement(content => $result);
   } else {
@@ -285,30 +298,41 @@ Finance::Bank::Postbank_de - Check your Postbank.de bank account from Perl
   $::_STDOUT_ =~ s!^Statement date : \d{8}\n!!m;
   my $expected = <<EOX;
 New Finance::Bank::Postbank_de created
-Connecting to https://banking-classic.postbank.de/anfang.jsp
-Logging into function ACCOUNTBALANCE
-Getting account statement (default or only one there)
-Downloading print version
-Balance : 2500.00 EUR
-20030520;20030520;GUTSCHRIFT;KINDERGELD                 KINDERGELD-NR 234568/133;ARBEITSAMT BONN;;154.00
-20030520;20030520;ÜBERWEISUNG;FINANZKASSE 3991234        STEUERNUMMER 007 03434     EST-VERANLAGUNG 99;FINANZAMT KÖLN-SÜD;;-328.75
-20030513;20030513;LASTSCHRIFT;RECHNUNG 03121999          BUCHUNGSKONTO 9876543210;TELEFON AG KÖLN;;-125.80
-20030513;20030513;SCHECK;;EC1037406000003;;-511.20
-20030513;20030513;LASTSCHRIFT;TEILNEHMERNUMMER 123456789 RUNDFUNK VON 1099 BIS 1299;GEZ KÖLN;;-84.75
-20030513;20030513;LASTSCHRIFT;STROMKOSTEN                KD-NR 1462347              JAHRESABRECHNUNG;STADTWERKE MUSTERSTADT;;-580.06
-20030513;20030513;INH.SCHECK;;2000123456789;;-100.00
-20030513;20030513;SCHECKEINR;EINGANG VORBEHALTEN;GUTBUCHUNG 12345;;1830.00
-20030513;20030513;DAUER ÜBERW;DA 100001;;MUSTERMANN, HANS;-31.50
-20030513;20030513;GUTSCHRIFT;BEZÜGE                     PERSONALNUMMER 700600170/01;ARBEITGEBER U. CO;;2780.70
-20030513;20030513;LASTSCHRIFT;MIETE 600,00 EUR           NEBENKOSTEN 250,00 EUR     OBJEKT 22/328              MUSTERPFAD 567, MUSTERSTADT;EIGENHEIM KG;;-850.00
+Connecting to https://banking.postbank.de/
+Activating (?-xism:^Kontoums.*?tze\$)
+Getting account statement via default (9999999999)
+Downloading text version
+Statement date : ????????
+Balance : 5314.05 EUR
+.berweisung;111111/1000000000/37050198 Finanzkasse 3991234 Steuernummer 00703434;Finanzkasse K.ln-S.d;PETRA PFIFFIG;-328.75
+.berweisung;111111/3299999999/20010020 .bertrag auf SparCard 3299999999;Petra Pfiffig;PETRA PFIFFIG;-228.61
+Gutschrift;Bez.ge Pers.Nr. 70600170/01 Arbeitgeber u. Co;PETRA PFIFFIG;Petra Pfiffig;2780.70
+.berweisung;DA 1000001;Verlagshaus Scribere GmbH;PETRA PFIFFIG;-31.50
+Scheckeinreichung;Eingang vorbehalten Gutbuchung 12345;PETRA PFIFFIG;Ein Fremder;1830.00
+Lastschrift;Miete 600+250 EUR Obj22/328 Schulstr.7, 12345 Meinheim;Eigenheim KG;PETRA PFIFFIG;-850.00
+Inh. Scheck;;2000123456789;PETRA PFIFFIG;-75.00
+Lastschrift;Teilnehmernr 1234567 Rundfunk 0103-1203;GEZ;PETRA PFIFFIG;-84.75
+Lastschrift;Rechnung 03121999;Telefon AG Köln;PETRA PFIFFIG;-125.80
+Lastschrift;Stromkosten Kd.Nr.1462347 Jahresabrechnung;Stadtwerke Musterstadt;PETRA PFIFFIG;-580.06
+Gutschrift;Kindergeld Kindergeld-Nr. 1462347;PETRA PFIFFIG;Arbeitsamt Bonn;154.00
 Closing session
+Activating (?-xism:^Banking beenden\$)
 EOX
   for ($::_STDOUT_,$expected) {
-    s!\r\n!!gsm;
+    s!\r\n!\n!gsm;
+    s![\x80-\xff]!.!gsm;
     # Strip out all date references ...
     s/^\d{8};\d{8};//gm;
   };
-  is_deeply([split /\n/, $::_STDOUT_],[split /\n/, $expected],'Retrieving an account statement works');
+  my @got = split /\n/, $::_STDOUT_;
+  my @expected = split /\n/, $expected;
+  is_deeply(\@got,\@expected,'Retrieving an account statement works')
+    or do {
+      diag "--- Got";
+      diag $::_STDOUT_;
+      diag "--- Expected";
+      diag $expected;
+    };
 
 =head1 DESCRIPTION
 
@@ -368,9 +392,18 @@ Closes the session and invalidates it on the server.
 Returns the C<WWW::Mechanize> object. You can retrieve the
 content of the current page from there.
 
+=head2 C<< $session->account_numbers >>
+
+Returns the account numbers. Only numeric account numbers
+are returned - the credit card account numbers are not
+returned.
+
 =head2 $account->select_function STRING
 
-Selects a function. The two currently supported functions are C<accountstatement> and C<quit>.
+Selects a function. The currently supported functions are
+
+	accountstatement
+	quit
 
 =head2 $account->get_account_statement
 

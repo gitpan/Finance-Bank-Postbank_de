@@ -7,30 +7,59 @@ use POSIX qw(strftime);
 use Finance::Bank::Postbank_de;
 use base 'Class::Accessor';
 
-use vars qw[ $VERSION ];
+use vars qw[ $VERSION %tags %totals %columns %safety_check ];
 
 $VERSION = '0.11';
 
 BEGIN {
-  Finance::Bank::Postbank_de::Account->mk_accessors(qw( number balance balance_prev iban ));
+  Finance::Bank::Postbank_de::Account->mk_accessors(qw( number balance balance_prev transactions_future iban blz account_type name));
 };
 
 sub new {
   my $self = $_[0]->SUPER::new();
   my ($class,%args) = @_;
 
-  if (exists $args{number} and exists $args{name}) {
-    croak "If you specify both, 'name' and 'number', they must be equal"
-      unless $args{number} eq $args{name};
-  };
+  my $num = delete $args{number} || delete $args{kontonummer};
+  croak "'kontonummer' is '$args{kontonummer}' and 'number' is '$num'"
+    if $args{kontonummer} and $args{kontonummer} ne $num;
 
-  $self->number($args{number} || $args{name});
+  $self->number($num) if (defined $num);
+    
+  $self->name($args{name})
+    if (exists $args{name});
 
   $self;
 };
 
-# name is an alias for number
-sub name { shift->number(@_); };
+*kontonummer = *number;
+
+%safety_check = (
+  name		=> 1,
+  kontonummer	=> 1,
+);
+
+%tags = (
+  Girokonto => [qw(Name BLZ Kontonummer IBAN)],
+  Sparcard => [qw(Name BLZ Kontonummer )],
+  Kreditkarte => [qw(Name BLZ Kontonummer IBAN)],
+);
+
+%totals = (
+  Girokonto => [[qr'Aktueller Kontostand' => 'balance'],[qr'Summe vorgemerkter Ums.tze' => 'transactions_future']],
+  Sparcard => [[qr'Aktueller Kontostand' => 'balance'],],
+);
+
+%columns = (
+  qr'Datum'		=> 'tradedate',
+  qr'Wertstellung'	=> 'valuedate',
+  qr'Art'		=> 'type',
+  qr'Buchungshinweis'	=> 'comment',
+  qr'Verwendungszweck'	=> 'comment',
+  qr'Auftraggeber'	=> 'sender',
+  qr'Empf.nger'		=> 'receiver',
+  qr'Betrag Euro'	=> 'amount',
+  qr'Saldo Euro'	=> 'running_total',
+);
 
 sub parse_date {
   my ($self,$date) = @_;
@@ -81,52 +110,68 @@ sub parse_statement {
     unless $raw_statement;
 
   my @lines = split /\r?\n/, $raw_statement;
-  croak "No valid account statement"
-    unless $lines[0] eq 'Postbank Kontoauszug Girokonto';
+  croak "No valid account statement: '$lines[0]'"
+    unless $lines[0] =~ /^Postbank Kontoauszug (.*)$/;
+  shift @lines;
+  $self->account_type($1);
+
+  $lines[0] =~ m!^\s*$!
+    or croak "Expected an empty line as the second line, got '$lines[0]'";
   shift @lines;
 
-  # PFIFFIG, PETRA  BLZ: 20010020  Kontonummer: 9999999999
-  $lines[0] =~ /^(.*?)\s+BLZ:\s+(\d{8})\s+Kontonummer:\s+(\d+)$/
-    or croak "No owner found in account statement ($lines[0])";
-  $self->{name} = $1;
-  $self->{blz} = $2;
+  # Name: PETRA PFIFFIG
+  for my $tag (@{ $tags{ $self->account_type }||[] }) {
+    $lines[0] =~ /^\Q$tag\E: (.*)$/
+      or croak "Field '$tag' not found in account statement ($lines[0])";
+    my $method = lc($tag);
 
-  # Verify resp. set the account number from what we read
-  my $num = $self->number;
-  croak "Account statement for different account"
-    unless (not defined $num) or ($num eq $3);
-  $self->number($3)
-    unless $num;
-  shift @lines;
+    # special check for special fields:
+    croak "Wrong/mixed account $method: Got '$1', expected '" . $self->$method . "'"
+      if (exists $safety_check{$method} and defined $self->$method and $self->$method ne $1);
 
-  # Collect the IBAN:
-  $lines[0] =~ /IBAN (DE\d\d \d\d\d\d \d\d\d\d \d\d\d\d \d\d\d\d \d\d)/
-    or croak "No IBAN found in account statement ($lines[0])";
-  $self->{iban} = $1;
-  shift @lines;
-
-  $lines[0] =~ /^Kontostand\s+Datum\s+Betrag\s+EUR$/
-    or croak "No summary found in account statement ($lines[0])";
-  shift @lines;
-  my ($balance_now,$balance_prev);
-  for ($balance_now,$balance_prev) {
-    if ($lines[0] =~ /^([0-9.]{10})\s+(-?[0-9.,]+)$/) {
-      $_ = [$self->parse_date($1),$self->parse_amount($2)];
-    } else {
-      die "Couldn't find a balance statement in ($lines[0])";
-    };
+    $self->$method($1);
     shift @lines;
+  };
+
+  $lines[0] =~ m!^\s*$!
+    or croak "Expected an empty line after the information, got '$lines[0]'";
+  shift @lines;
+  
+  for my $total (@{ $totals{ $self->account_type }||[] }) {
+    my ($re,$method) = @$total;
+    $lines[0] =~ /^$re:\s*(.*) Euro$/
+      or croak "No summary found in account statement ($lines[0]) for $method";
+    shift @lines;
+
+    my ($balance) = $1;
+    if ($balance =~ /^(-?[0-9.,]+)$/) {
+      $self->$method( ['????????',$self->parse_amount($balance)]);
+    } else {
+      die "Invalid number '$_' found for $total";
+    };
+  };
+
+  $lines[0] =~ m!^\s*$!
+    or croak "Expected an empty line after the account balances, got '$lines[0]'";
+  shift @lines;
+
+  # Now parse the lines for each cashflow :
+  $lines[0] =~ /^Datum\tWertstellung\tArt/
+    or croak "Couldn't find start of transactions ($lines[0])";
+
+  my (@fields);
+  COLUMN:
+  for my $col (split /\t/, $lines[0]) {
+    for my $target (keys %columns) {
+      if ($col =~ m!^$target$!) {
+        push @fields, $columns{$target};
+        next COLUMN;
+      };
+    };
+    die "Unknown column '$col'";
   };
   shift @lines;
 
-  $self->balance( $balance_now );
-  $self->balance_prev( $balance_prev );
-
-  # Now parse the lines for each cashflow :
-  $lines[0] =~ /^Datum\s+Wertstellung\s+Art\s+Verwendungszweck\s+Auftraggeber\s+Empfänger\s+Betrag\s+EUR$/
-    or croak "Couldn't find start of transactions ($lines[0])";
-  shift @lines;
-  my (@fields) = qw[tradedate valuedate type comment receiver sender amount];
   my (%convert) = (
     tradedate => \&parse_date,
     valuedate => \&parse_date,
@@ -139,7 +184,11 @@ sub parse_statement {
     next if $line =~ /^\s*$/;
     my (@row) = split /\t/, $line;
     scalar @row == scalar @fields
-      or die "Malformed cashflow ($line)";
+      or die "Malformed cashflow ($line): Expected ".scalar(@fields)." entries, got ".scalar(@row);
+
+    for (@row) {
+      s!^\s+!!; s!\s+$!!;
+    };
 
     my (%rec);
     @rec{@fields} = @row;
@@ -217,7 +266,6 @@ Finance::Bank::Postbank_de::Account - Postbank bank account class
                 password => '11111',
               );
   # Retrieve account data :
-  print "Statement date : ",$statement->balance->[0],"\n";
   print "Balance : ",$statement->balance->[1]," EUR\n";
 
   # Output CSV for the transactions
@@ -229,27 +277,33 @@ Finance::Bank::Postbank_de::Account - Postbank bank account class
 
 =for example_testing
   isa_ok($statement,"Finance::Bank::Postbank_de::Account");
-  $::_STDOUT_ =~ s!^Statement date : \d{8}\n!!m;
   my $expected = <<EOX;
-Balance : 2500.00 EUR
-20030520;20030520;GUTSCHRIFT;KINDERGELD                 KINDERGELD-NR 234568/133;ARBEITSAMT BONN;;154.00
-20030520;20030520;ÜBERWEISUNG;FINANZKASSE 3991234        STEUERNUMMER 007 03434     EST-VERANLAGUNG 99;FINANZAMT KÖLN-SÜD;;-328.75
-20030513;20030513;LASTSCHRIFT;RECHNUNG 03121999          BUCHUNGSKONTO 9876543210;TELEFON AG KÖLN;;-125.80
-20030513;20030513;SCHECK;;EC1037406000003;;-511.20
-20030513;20030513;LASTSCHRIFT;TEILNEHMERNUMMER 123456789 RUNDFUNK VON 1099 BIS 1299;GEZ KÖLN;;-84.75
-20030513;20030513;LASTSCHRIFT;STROMKOSTEN                KD-NR 1462347              JAHRESABRECHNUNG;STADTWERKE MUSTERSTADT;;-580.06
-20030513;20030513;INH.SCHECK;;2000123456789;;-100.00
-20030513;20030513;SCHECKEINR;EINGANG VORBEHALTEN;GUTBUCHUNG 12345;;1830.00
-20030513;20030513;DAUER ÜBERW;DA 100001;;MUSTERMANN, HANS;-31.50
-20030513;20030513;GUTSCHRIFT;BEZÜGE                     PERSONALNUMMER 700600170/01;ARBEITGEBER U. CO;;2780.70
-20030513;20030513;LASTSCHRIFT;MIETE 600,00 EUR           NEBENKOSTEN 250,00 EUR     OBJEKT 22/328              MUSTERPFAD 567, MUSTERSTADT;EIGENHEIM KG;;-850.00
+Balance : 5314.05 EUR
+.berweisung;111111/1000000000/37050198 Finanzkasse 3991234 Steuernummer 00703434;Finanzkasse K.ln-S.d;PETRA PFIFFIG;-328.75
+.berweisung;111111/3299999999/20010020 .bertrag auf SparCard 3299999999;Petra Pfiffig;PETRA PFIFFIG;-228.61
+Gutschrift;Bez.ge Pers.Nr. 70600170/01 Arbeitgeber u. Co;PETRA PFIFFIG;Petra Pfiffig;2780.70
+.berweisung;DA 1000001;Verlagshaus Scribere GmbH;PETRA PFIFFIG;-31.50
+Scheckeinreichung;Eingang vorbehalten Gutbuchung 12345;PETRA PFIFFIG;Ein Fremder;1830.00
+Lastschrift;Miete 600+250 EUR Obj22/328 Schulstr.7, 12345 Meinheim;Eigenheim KG;PETRA PFIFFIG;-850.00
+Inh. Scheck;;2000123456789;PETRA PFIFFIG;-75.00
+Lastschrift;Teilnehmernr 1234567 Rundfunk 0103-1203;GEZ;PETRA PFIFFIG;-84.75
+Lastschrift;Rechnung 03121999;Telefon AG Köln;PETRA PFIFFIG;-125.80
+Lastschrift;Stromkosten Kd.Nr.1462347 Jahresabrechnung;Stadtwerke Musterstadt;PETRA PFIFFIG;-580.06
+Gutschrift;Kindergeld Kindergeld-Nr. 1462347;PETRA PFIFFIG;Arbeitsamt Bonn;154.00
 EOX
   for ($::_STDOUT_,$expected) {
     s!\r\n!!gsm;
     # Strip out all date references ...
     s/^\d{8};\d{8};//gm;
+    s![\x80-\xff]!.!gsm;
   };
-  is_deeply([split /\n/, $::_STDOUT_],[split /\n/, $expected],"Retrieved the correct data");
+  is_deeply([split /\n/, $::_STDOUT_],[split /\n/, $expected],"Retrieved the correct data")
+    or do {
+      diag "--- Expected";
+      diag $expected;
+      diag "--- Got";
+      diag $::_STDOUT_;
+    };
 
 =head1 DESCRIPTION
 

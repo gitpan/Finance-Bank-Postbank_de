@@ -1,6 +1,7 @@
 #!/usr/bin/perl -w
 use strict;
 use FindBin;
+use Data::Dumper;
 
 use Test::More tests => 3;
 
@@ -32,15 +33,15 @@ SKIP: {
     };
     skip "Banking is unavailable due to maintenance", 2
       if $account->maintenance;
-    $account->agent(undef);
+    $account->new_session;
 
-    $status = $account->select_function("accountstatement");
-    unless ($status == 200) {
-      diag $account->agent->res->as_string;
-      skip "Couldn't get to account statement (LWP: $status)", 2;
+    my @links = $account->agent->links;
+    my $error;
+    for my $function (keys %Finance::Bank::Postbank_de::functions) {
+      is( scalar(grep({ $_->text =~ /$Finance::Bank::Postbank_de::functions{$function}/ }@links)), 1, "Function $function is present on the page") or $error++;
     };
-
-    ok($account->close_session(),"Closed session");
-    is($account->agent(),undef,"agent was discarded");
+    if ($error) {
+      diag $_->text for @links;
+    };
   };
 };
