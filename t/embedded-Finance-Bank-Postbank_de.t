@@ -36,7 +36,7 @@ eval q{
   my $example = sub {
     local $^W = 0;
 
-#line 233 lib/Finance/Bank/Postbank_de.pm
+#line 232 lib/Finance/Bank/Postbank_de.pm
 
   use strict;
   use Finance::Bank::Postbank_de;
@@ -72,12 +72,12 @@ eval q{
 
   }
 };
-is($@, '', "example from line 233");
+is($@, '', "example from line 232");
 
 {
     undef $main::_STDOUT_;
     undef $main::_STDERR_;
-#line 233 lib/Finance/Bank/Postbank_de.pm
+#line 232 lib/Finance/Bank/Postbank_de.pm
 
   use strict;
   use Finance::Bank::Postbank_de;
@@ -133,7 +133,7 @@ Balance : 2500.00 EUR
 Closing session
 EOX
   for ($::_STDOUT_,$expected) {
-    s!\r\n!!gsm;    
+    s!\r\n!!gsm;
     # Strip out all date references ...
     s/^\d{8};\d{8};//gm;
   };
