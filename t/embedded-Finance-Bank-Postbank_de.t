@@ -51,7 +51,7 @@ eval q{
   my $example = sub {
     local $^W = 0;
 
-#line 234 lib/Finance/Bank/Postbank_de.pm
+#line 252 lib/Finance/Bank/Postbank_de.pm
 
   use strict;
   use Finance::Bank::Postbank_de;
@@ -87,7 +87,7 @@ eval q{
 
   }
 };
-is($@, '', "example from line 234");
+is($@, '', "example from line 252");
 
 };
 SKIP: {
@@ -107,7 +107,7 @@ SKIP: {
     {
     undef $main::_STDOUT_;
     undef $main::_STDERR_;
-#line 234 lib/Finance/Bank/Postbank_de.pm
+#line 252 lib/Finance/Bank/Postbank_de.pm
 
   use strict;
   use Finance::Bank::Postbank_de;
@@ -144,7 +144,7 @@ SKIP: {
   $::_STDOUT_ =~ s!^Statement date : \d{8}\n!!m;
   my $expected = <<EOX;
 New Finance::Bank::Postbank_de created
-Connecting to https://banking.postbank.de/anfang.jsp
+Connecting to https://banking-classic.postbank.de/anfang.jsp
 Logging into function ACCOUNTBALANCE
 Getting account statement (default or only one there)
 Downloading print version
