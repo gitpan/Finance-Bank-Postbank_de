@@ -9,7 +9,7 @@ use base 'Class::Accessor';
 
 use vars qw[ $VERSION ];
 
-$VERSION = '0.06';
+$VERSION = '0.07';
 
 BEGIN {
   Finance::Bank::Postbank_de::Account->mk_accessors(qw( number balance balance_prev  ));
@@ -105,7 +105,7 @@ sub parse_statement {
   shift @lines;
   my ($balance_now,$balance_prev);
   for ($balance_now,$balance_prev) {
-    if ($lines[0] =~ /^([0-9.]{10})\s+([0-9.,]+)$/) {
+    if ($lines[0] =~ /^([0-9.]{10})\s+(-?[0-9.,]+)$/) {
       $_ = [$self->parse_date($1),$self->parse_amount($2)];
     } else {
       die "Couldn't find a balance statement in ($lines[0])";
@@ -203,27 +203,41 @@ Finance::Bank::Postbank_de::Account - Postbank bank account class
 
 =head1 SYNOPSIS
 
-=begin example
+=for example begin
 
   use strict;
-  use Finance::Bank::Postbank_de;
-  my $account = Finance::Bank::Postbank_de::Account->parse_statement(
+  use Finance::Bank::Postbank_de::Account;
+  my $statement = Finance::Bank::Postbank_de::Account->parse_statement(
                 number => '9999999999',
                 password => '11111',
               );
   # Retrieve account data :
-  my $retrieved_statement = $account->parse_statement();
-  print "Statement date : ",$retrieved_statement->balance->[0],"\n";
-  print "Balance : ",$retrieved_statement->balance->[1]," EUR\n";
+  print "Statement date : ",$statement->balance->[0],"\n";
+  print "Balance : ",$statement->balance->[1]," EUR\n";
 
   # Output CSV for the transactions
-  for my $row ($retrieved_statement->transactions) {
-    print join( ";", map { $row->{$_} } (qw( date valuedate type comment receiver sender amount ))),"\n";
+  for my $row ($statement->transactions) {
+    print join( ";", map { $row->{$_} } (qw( tradedate valuedate type comment receiver sender amount ))),"\n";
   };
 
-  $account->close_session;
+=for example end
 
-=end example
+=for example_testing
+  isa_ok($statement,"Finance::Bank::Postbank_de::Account");
+  $::_STDOUT_ =~ s!^Statement date : \d{8}\n!!m;
+  is($::_STDOUT_,'Balance : 2500.00 EUR
+20030520;20030520;GUTSCHRIFT;KINDERGELD                 KINDERGELD-NR 234568/133;ARBEITSAMT BONN;;154.00
+20030520;20030520;ÜBERWEISUNG;FINANZKASSE 3991234        STEUERNUMMER 007 03434     EST-VERANLAGUNG 99;FINANZAMT KÖLN-SÜD;;-328.75
+20030513;20030513;LASTSCHRIFT;RECHNUNG 03121999          BUCHUNGSKONTO 9876543210;TELEFON AG KÖLN;;-125.80
+20030513;20030513;SCHECK;;EC1037406000003;;-511.20
+20030513;20030513;LASTSCHRIFT;TEILNEHMERNUMMER 123456789 RUNDFUNK VON 1099 BIS 1299;GEZ KÖLN;;-84.75
+20030513;20030513;LASTSCHRIFT;STROMKOSTEN                KD-NR 1462347              JAHRESABRECHNUNG;STADTWERKE MUSTERSTADT;;-580.06
+20030513;20030513;INH.SCHECK;;2000123456789;;-100.00
+20030513;20030513;SCHECKEINR;EINGANG VORBEHALTEN;GUTBUCHUNG 12345;;1830.00
+20030513;20030513;DAUER ÜBERW;DA 100001;;MUSTERMANN, HANS;-31.50
+20030513;20030513;GUTSCHRIFT;BEZÜGE                     PERSONALNUMMER 700600170/01;ARBEITGEBER U. CO;;2780.70
+20030513;20030513;LASTSCHRIFT;MIETE 600,00 EUR           NEBENKOSTEN 250,00 EUR     OBJEKT 22/328              MUSTERPFAD 567, MUSTERSTADT;EIGENHEIM KG;;-850.00
+',"Retrieved the correct data");
 
 =head1 DESCRIPTION
 
@@ -324,7 +338,7 @@ C<trade_dates> is a convenience method that returns all trade dates on the accou
 
 =head2 Converting a daily download to a sequence
 
-=begin example
+=for example begin
 
   #!/usr/bin/perl -w
   use strict;
@@ -378,7 +392,7 @@ C<trade_dates> is a convenience method that returns all trade dates on the accou
   # And update our log with what we have seen
   push @statement, @new;
 
-=end example
+=for example end
 
 =head1 AUTHOR
 

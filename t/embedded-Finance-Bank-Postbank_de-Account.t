@@ -33,9 +33,9 @@ tie *STDERR, 'Catch', '_STDERR_' or die $!;
 
 SKIP: {
     # A header testing whether we find all prerequisites :
-      # Check for module Finance::Bank::Postbank_de
-  eval { require Finance::Bank::Postbank_de };
-  skip "Need module Finance::Bank::Postbank_de to run this test", 1
+      # Check for module Finance::Bank::Postbank_de::Account
+  eval { require Finance::Bank::Postbank_de::Account };
+  skip "Need module Finance::Bank::Postbank_de::Account to run this test", 1
     if $@;
 
   # Check for module strict
@@ -54,28 +54,86 @@ eval q{
 #line 207 lib/Finance/Bank/Postbank_de/Account.pm
 
   use strict;
-  use Finance::Bank::Postbank_de;
-  my $account = Finance::Bank::Postbank_de::Account->parse_statement(
+  use Finance::Bank::Postbank_de::Account;
+  my $statement = Finance::Bank::Postbank_de::Account->parse_statement(
                 number => '9999999999',
                 password => '11111',
               );
   # Retrieve account data :
-  my $retrieved_statement = $account->parse_statement();
-  print "Statement date : ",$retrieved_statement->balance->[0],"\n";
-  print "Balance : ",$retrieved_statement->balance->[1]," EUR\n";
+  print "Statement date : ",$statement->balance->[0],"\n";
+  print "Balance : ",$statement->balance->[1]," EUR\n";
 
   # Output CSV for the transactions
-  for my $row ($retrieved_statement->transactions) {
-    print join( ";", map { $row->{$_} } (qw( date valuedate type comment receiver sender amount ))),"\n";
+  for my $row ($statement->transactions) {
+    print join( ";", map { $row->{$_} } (qw( tradedate valuedate type comment receiver sender amount ))),"\n";
   };
 
-  $account->close_session;
+
+
 
 ;
 
   }
 };
 is($@, '', "example from line 207");
+
+};
+SKIP: {
+    # A header testing whether we find all prerequisites :
+      # Check for module Finance::Bank::Postbank_de::Account
+  eval { require Finance::Bank::Postbank_de::Account };
+  skip "Need module Finance::Bank::Postbank_de::Account to run this test", 1
+    if $@;
+
+  # Check for module strict
+  eval { require strict };
+  skip "Need module strict to run this test", 1
+    if $@;
+
+
+    # The original POD test
+    {
+    undef $main::_STDOUT_;
+    undef $main::_STDERR_;
+#line 207 lib/Finance/Bank/Postbank_de/Account.pm
+
+  use strict;
+  use Finance::Bank::Postbank_de::Account;
+  my $statement = Finance::Bank::Postbank_de::Account->parse_statement(
+                number => '9999999999',
+                password => '11111',
+              );
+  # Retrieve account data :
+  print "Statement date : ",$statement->balance->[0],"\n";
+  print "Balance : ",$statement->balance->[1]," EUR\n";
+
+  # Output CSV for the transactions
+  for my $row ($statement->transactions) {
+    print join( ";", map { $row->{$_} } (qw( tradedate valuedate type comment receiver sender amount ))),"\n";
+  };
+
+
+
+
+  isa_ok($statement,"Finance::Bank::Postbank_de::Account");
+  $::_STDOUT_ =~ s!^Statement date : \d{8}\n!!m;
+  is($::_STDOUT_,'Balance : 2500.00 EUR
+20030520;20030520;GUTSCHRIFT;KINDERGELD                 KINDERGELD-NR 234568/133;ARBEITSAMT BONN;;154.00
+20030520;20030520;ÜBERWEISUNG;FINANZKASSE 3991234        STEUERNUMMER 007 03434     EST-VERANLAGUNG 99;FINANZAMT KÖLN-SÜD;;-328.75
+20030513;20030513;LASTSCHRIFT;RECHNUNG 03121999          BUCHUNGSKONTO 9876543210;TELEFON AG KÖLN;;-125.80
+20030513;20030513;SCHECK;;EC1037406000003;;-511.20
+20030513;20030513;LASTSCHRIFT;TEILNEHMERNUMMER 123456789 RUNDFUNK VON 1099 BIS 1299;GEZ KÖLN;;-84.75
+20030513;20030513;LASTSCHRIFT;STROMKOSTEN                KD-NR 1462347              JAHRESABRECHNUNG;STADTWERKE MUSTERSTADT;;-580.06
+20030513;20030513;INH.SCHECK;;2000123456789;;-100.00
+20030513;20030513;SCHECKEINR;EINGANG VORBEHALTEN;GUTBUCHUNG 12345;;1830.00
+20030513;20030513;DAUER ÜBERW;DA 100001;;MUSTERMANN, HANS;-31.50
+20030513;20030513;GUTSCHRIFT;BEZÜGE                     PERSONALNUMMER 700600170/01;ARBEITGEBER U. CO;;2780.70
+20030513;20030513;LASTSCHRIFT;MIETE 600,00 EUR           NEBENKOSTEN 250,00 EUR     OBJEKT 22/328              MUSTERPFAD 567, MUSTERSTADT;EIGENHEIM KG;;-850.00
+',"Retrieved the correct data");
+
+    undef $main::_STDOUT_;
+    undef $main::_STDERR_;
+}
 
 };
 SKIP: {
@@ -126,7 +184,7 @@ eval q{
   my $example = sub {
     local $^W = 0;
 
-#line 328 lib/Finance/Bank/Postbank_de/Account.pm
+#line 342 lib/Finance/Bank/Postbank_de/Account.pm
 
   #!/usr/bin/perl -w
   use strict;
@@ -184,7 +242,7 @@ eval q{
 
   }
 };
-is($@, '', "example from line 328");
+is($@, '', "example from line 342");
 
 };
 SKIP: {

@@ -10,7 +10,7 @@ use Finance::Bank::Postbank_de::Account;
 
 use vars qw[ $VERSION ];
 
-$VERSION = '0.06';
+$VERSION = '0.07';
 
 BEGIN {
   Finance::Bank::Postbank_de->mk_accessors(qw( agent ));
@@ -216,7 +216,8 @@ Finance::Bank::Postbank_de - Check your Postbank.de bank account from Perl
 
 =head1 SYNOPSIS
 
-=begin example
+=for example begin
+
   use strict;
   use Finance::Bank::Postbank_de;
   my $account = Finance::Bank::Postbank_de->new(
@@ -231,17 +232,44 @@ Finance::Bank::Postbank_de - Check your Postbank.de bank account from Perl
                               },
               );
   # Retrieve account data :
-  my $retrieved_statement = $account->parse_statement();
+  my $retrieved_statement = $account->get_account_statement();
   print "Statement date : ",$retrieved_statement->balance->[0],"\n";
   print "Balance : ",$retrieved_statement->balance->[1]," EUR\n";
 
   # Output CSV for the transactions
   for my $row ($retrieved_statement->transactions) {
-    print join( ";", map { $row->{$_} } (qw( date valuedate type comment receiver sender amount ))),"\n";
+    print join( ";", map { $row->{$_} } (qw( tradedate valuedate type comment receiver sender amount ))),"\n";
   };
 
   $account->close_session;
-=end example
+  # See Finance::Bank::Postbank_de::Account for
+  # a simpler example
+
+=for example end
+
+=for example_testing
+  isa_ok($account,"Finance::Bank::Postbank_de");
+  isa_ok($retrieved_statement,"Finance::Bank::Postbank_de::Account");
+  $::_STDOUT_ =~ s!^Statement date : \d{8}\n!!m;
+  is($::_STDOUT_,'New Finance::Bank::Postbank_de created
+Connecting to https://banking.postbank.de/anfang.jsp
+Logging into function ACCOUNTBALANCE
+Getting account statement (default or only one there)
+Downloading print version
+Balance : 2500.00 EUR
+20030520;20030520;GUTSCHRIFT;KINDERGELD                 KINDERGELD-NR 234568/133;ARBEITSAMT BONN;;154.00
+20030520;20030520;ÜBERWEISUNG;FINANZKASSE 3991234        STEUERNUMMER 007 03434     EST-VERANLAGUNG 99;FINANZAMT KÖLN-SÜD;;-328.75
+20030513;20030513;LASTSCHRIFT;RECHNUNG 03121999          BUCHUNGSKONTO 9876543210;TELEFON AG KÖLN;;-125.80
+20030513;20030513;SCHECK;;EC1037406000003;;-511.20
+20030513;20030513;LASTSCHRIFT;TEILNEHMERNUMMER 123456789 RUNDFUNK VON 1099 BIS 1299;GEZ KÖLN;;-84.75
+20030513;20030513;LASTSCHRIFT;STROMKOSTEN                KD-NR 1462347              JAHRESABRECHNUNG;STADTWERKE MUSTERSTADT;;-580.06
+20030513;20030513;INH.SCHECK;;2000123456789;;-100.00
+20030513;20030513;SCHECKEINR;EINGANG VORBEHALTEN;GUTBUCHUNG 12345;;1830.00
+20030513;20030513;DAUER ÜBERW;DA 100001;;MUSTERMANN, HANS;-31.50
+20030513;20030513;GUTSCHRIFT;BEZÜGE                     PERSONALNUMMER 700600170/01;ARBEITGEBER U. CO;;2780.70
+20030513;20030513;LASTSCHRIFT;MIETE 600,00 EUR           NEBENKOSTEN 250,00 EUR     OBJEKT 22/328              MUSTERPFAD 567, MUSTERSTADT;EIGENHEIM KG;;-850.00
+Closing session
+','Retrieving an account statement works');
 
 =head1 DESCRIPTION
 
@@ -321,6 +349,9 @@ Returns true if our banking session timed out.
 Returns true if the banking interface is currently unavailable due to maintenance.
 
 =head1 TODO:
+
+  * Add even more runtime tests to validate the HTML
+  * Streamline the site access to use even less bandwidth
 
 =head1 AUTHOR
 
