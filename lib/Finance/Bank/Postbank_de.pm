@@ -10,7 +10,7 @@ use Finance::Bank::Postbank_de::Account;
 
 use vars qw[ $VERSION ];
 
-$VERSION = '0.04';
+$VERSION = '0.05';
 
 BEGIN {
   Finance::Bank::Postbank_de->mk_accessors(qw( agent ));
@@ -86,9 +86,26 @@ sub get_login_page {
   $agent->status;
 };
 
+sub error_page {
+  # Check if an error page is shown (a page with much red on it)
+  my ($self) = @_;
+  $self->agent->content =~ /<tr valign="top" bgcolor="#FF0033">/sm;
+};
+
 sub maintenance {
   my ($self) = @_;
+  $self->error_page and 
   $self->agent->content =~ /derzeit steht das Internet Banking aufgrund von Wartungsarbeiten leider nicht zur Verf&uuml;gung.\s*<br>\s*In K&uuml;rze wird das Internet Banking wieder wie gewohnt erreichbar sein./gsm;
+};
+
+sub access_denied {
+  my ($self) = @_;
+  my $content = $self->agent->content;
+  
+  $self->error_page and 
+  (  $content =~ /Die eingegebene Kontonummer ist unvollst&auml;ndig oder falsch\..*\(2051\)/gsm 
+  or $content =~ /Die eingegebene PIN ist falsch\. Bitte geben Sie die richtige PIN ein\.\s*\(10011\)/gsm
+  or $content =~ /Die von Ihnen eingegebene Kontonummer ist ung&uuml;ltig und entspricht keiner Postbank-Kontonummer.\s*\(3040\)/gsm );
 };
 
 sub session_timed_out {
@@ -116,9 +133,14 @@ sub select_function {
 
 sub close_session {
   my ($self) = @_;
-  $self->log("Closing session");
-  $self->select_function('quit');
-  my $result = $self->agent->res->as_string =~ /Online-Banking\s+beendet/sm;
+  my $result;
+  if (not $self->access_denied) {
+    $self->log("Closing session");
+    $self->select_function('quit');
+    $result = $self->agent->res->as_string =~ /Online-Banking\s+beendet/sm;
+  } else {
+    $result = 'Never logged in';
+  };
   $self->agent(undef);
   $result;
 };

@@ -51,7 +51,7 @@ eval q{
   my $example = sub {
     local $^W = 0;
 
-#line 188 lib/Finance/Bank/Postbank_de.pm
+#line 210 lib/Finance/Bank/Postbank_de.pm
   use strict;
   use Finance::Bank::Postbank_de;
   my $account = Finance::Bank::Postbank_de->new(
@@ -80,7 +80,7 @@ eval q{
 
   }
 };
-is($@, '', "example from line 188");
+is($@, '', "example from line 210");
 
 };
 SKIP: {

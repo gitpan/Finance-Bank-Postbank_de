@@ -12,8 +12,10 @@ can_ok($account, qw(
   select_function
   get_account_statement
   close_session
+  error_page
   session_timed_out
   maintenance
+  access_denied
   ));
 
 # Check our accessor methods

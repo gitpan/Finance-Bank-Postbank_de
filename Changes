@@ -1,5 +1,10 @@
 Revision history for Perl extension Finance::Bank::Postbank_de.
 
+0.05 20030206
+  - Fixed inline POD tests/examples (how I hate broken synopsis code)
+  - Added access_denied() to Finance::Bank::Postbank_de
+  - Added error_page() to Finance::Bank::Postbank_de for generic error recognition
+
 0.04 20030204
   - Revamped tests to include the examples
   - Examples use List::Sliding::Changes

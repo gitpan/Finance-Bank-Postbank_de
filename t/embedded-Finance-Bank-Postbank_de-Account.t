@@ -86,12 +86,7 @@ SKIP: {
 };
 SKIP: {
     # A header testing whether we find all prerequisites :
-      # Check for module Finance::Bank::Postbank_de
-  eval { require Finance::Bank::Postbank_de };
-  skip "Need module Finance::Bank::Postbank_de to run this test", 1
-    if $@;
-
-  # Check for module Finance::Bank::Postbank_de::Account
+      # Check for module Finance::Bank::Postbank_de::Account
   eval { require Finance::Bank::Postbank_de::Account };
   skip "Need module Finance::Bank::Postbank_de::Account to run this test", 1
     if $@;
@@ -101,14 +96,14 @@ SKIP: {
   skip "Need module FindBin to run this test", 1
     if $@;
 
+  # Check for module List::Sliding::Changes
+  eval { require List::Sliding::Changes };
+  skip "Need module List::Sliding::Changes to run this test", 1
+    if $@;
+
   # Check for module MIME::Lite
   eval { require MIME::Lite };
   skip "Need module MIME::Lite to run this test", 1
-    if $@;
-
-  # Check for module SlidingList::Changes
-  eval { require SlidingList::Changes };
-  skip "Need module SlidingList::Changes to run this test", 1
     if $@;
 
   # Check for module Tie::File
@@ -133,10 +128,9 @@ eval q{
   #!/usr/bin/perl -w
   use strict;
 
-  #use Finance::Bank::Postbank_de;
   use Finance::Bank::Postbank_de::Account;
   use Tie::File;
-  use SlidingList::Changes qw(find_new_elements);
+  use List::Sliding::Changes qw(find_new_elements);
   use FindBin;
   use MIME::Lite;
 
@@ -148,14 +142,13 @@ eval q{
 
   # See what has happened since we last polled
   my $retrieved_statement = Finance::Bank::Postbank_de::Account->parse_statement(
-                         number => '124415607',
-                         password => '44177',
+                         number => '9999999999',
+                         password => '11111',
                 );
 
   # Output CSV for the transactions
   for my $row (reverse @{$retrieved_statement->transactions()}) {
-    push @transactions, join( ";", map { $row->{$_} } (qw( tradedate valuedate typ
-  e comment receiver sender amount )));
+    push @transactions, join( ";", map { $row->{$_} } (qw( tradedate valuedate type comment receiver sender amount )));
   };
 
 
@@ -166,8 +159,7 @@ eval q{
     my ($date,$balance) = @{$retrieved_statement->balance};
     $body .= "<b>Balance ($date) :</b> $balance<br>";
     $body .= "<tr><th>";
-    $body .= join( "</th><th>", qw( tradedate valuedate type comment receiver send
-  er amount )). "</th></tr>";
+    $body .= join( "</th><th>", qw( tradedate valuedate type comment receiver sender amount )). "</th></tr>";
     for my $line (@{[@new]}) {
       $line =~ s!;!</td><td>!g;
       $body .= "<tr><td>$line</td></tr>\n";
@@ -175,7 +167,7 @@ eval q{
     $body .= "</body></html>";
     MIME::Lite->new(
                           From     =>'update.pl',
-                          To       =>'corion',
+                          To       =>'you',
                           Subject  =>"Account update $date",
                           Type     =>'text/html',
                           Encoding =>'base64',
@@ -184,6 +176,7 @@ eval q{
 
   # And update our log with what we have seen
   push @statement, @new;
+  
 ;
 
   }

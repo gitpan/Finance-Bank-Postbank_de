@@ -8,7 +8,7 @@ use base 'Class::Accessor';
 
 use vars qw[ $VERSION ];
 
-$VERSION = '0.04';
+$VERSION = '0.05';
 
 BEGIN {
   Finance::Bank::Postbank_de::Account->mk_accessors(qw( number balance balance_prev transactions ));
@@ -261,10 +261,9 @@ is assumed.
   #!/usr/bin/perl -w
   use strict;
 
-  #use Finance::Bank::Postbank_de;
   use Finance::Bank::Postbank_de::Account;
   use Tie::File;
-  use SlidingList::Changes qw(find_new_elements);
+  use List::Sliding::Changes qw(find_new_elements);
   use FindBin;
   use MIME::Lite;
 
@@ -276,14 +275,13 @@ is assumed.
 
   # See what has happened since we last polled
   my $retrieved_statement = Finance::Bank::Postbank_de::Account->parse_statement(
-                         number => '124415607',
-                         password => '44177',
+                         number => '9999999999',
+                         password => '11111',
                 );
 
   # Output CSV for the transactions
   for my $row (reverse @{$retrieved_statement->transactions()}) {
-    push @transactions, join( ";", map { $row->{$_} } (qw( tradedate valuedate typ
-  e comment receiver sender amount )));
+    push @transactions, join( ";", map { $row->{$_} } (qw( tradedate valuedate type comment receiver sender amount )));
   };
 
 
@@ -294,8 +292,7 @@ is assumed.
     my ($date,$balance) = @{$retrieved_statement->balance};
     $body .= "<b>Balance ($date) :</b> $balance<br>";
     $body .= "<tr><th>";
-    $body .= join( "</th><th>", qw( tradedate valuedate type comment receiver send
-  er amount )). "</th></tr>";
+    $body .= join( "</th><th>", qw( tradedate valuedate type comment receiver sender amount )). "</th></tr>";
     for my $line (@{[@new]}) {
       $line =~ s!;!</td><td>!g;
       $body .= "<tr><td>$line</td></tr>\n";
@@ -303,7 +300,7 @@ is assumed.
     $body .= "</body></html>";
     MIME::Lite->new(
                           From     =>'update.pl',
-                          To       =>'corion',
+                          To       =>'you',
                           Subject  =>"Account update $date",
                           Type     =>'text/html',
                           Encoding =>'base64',
@@ -312,6 +309,7 @@ is assumed.
 
   # And update our log with what we have seen
   push @statement, @new;
+  
 =for example end
 
 =head1 AUTHOR
