@@ -1,4 +1,4 @@
-#!D:\perl\5.8.2\bin\perl.exe -w
+#!/opt/perl58/bin/perl -w
 
 use Test::More 'no_plan';
 
@@ -20,8 +20,9 @@ sub CLOSE {}    # XXX STDERR/STDOUT.  This is not the behavior we want.
 sub READ {}
 sub READLINE {}
 sub GETC {}
+sub BINMODE {}
 
-my $Original_File = 'lib\Finance\Bank\Postbank_de.pm';
+my $Original_File = 'lib/Finance/Bank/Postbank_de.pm';
 
 package main;
 
@@ -30,13 +31,27 @@ $SIG{__WARN__} = sub { $main::_STDERR_ .= join '', @_; };
 tie *STDOUT, 'Catch', '_STDOUT_' or die $!;
 tie *STDERR, 'Catch', '_STDERR_' or die $!;
 
-    undef $main::_STDOUT_;
+SKIP: {
+    # A header testing whether we find all prerequisites :
+      # Check for module Finance::Bank::Postbank_de
+  eval { require Finance::Bank::Postbank_de };
+  skip "Need module Finance::Bank::Postbank_de to run this test", 1
+    if $@;
+
+  # Check for module strict
+  eval { require strict };
+  skip "Need module strict to run this test", 1
+    if $@;
+
+
+    # The original POD test
+        undef $main::_STDOUT_;
     undef $main::_STDERR_;
 eval q{
   my $example = sub {
     local $^W = 0;
 
-#line 232 lib/Finance/Bank/Postbank_de.pm
+#line 234 lib/Finance/Bank/Postbank_de.pm
 
   use strict;
   use Finance::Bank::Postbank_de;
@@ -72,12 +87,27 @@ eval q{
 
   }
 };
-is($@, '', "example from line 232");
+is($@, '', "example from line 234");
 
-{
+};
+SKIP: {
+    # A header testing whether we find all prerequisites :
+      # Check for module Finance::Bank::Postbank_de
+  eval { require Finance::Bank::Postbank_de };
+  skip "Need module Finance::Bank::Postbank_de to run this test", 1
+    if $@;
+
+  # Check for module strict
+  eval { require strict };
+  skip "Need module strict to run this test", 1
+    if $@;
+
+
+    # The original POD test
+    {
     undef $main::_STDOUT_;
     undef $main::_STDERR_;
-#line 232 lib/Finance/Bank/Postbank_de.pm
+#line 234 lib/Finance/Bank/Postbank_de.pm
 
   use strict;
   use Finance::Bank::Postbank_de;
@@ -143,6 +173,12 @@ EOX
     undef $main::_STDERR_;
 }
 
-    undef $main::_STDOUT_;
+};
+SKIP: {
+    # A header testing whether we find all prerequisites :
+    
+    # The original POD test
+        undef $main::_STDOUT_;
     undef $main::_STDERR_;
 
+};
