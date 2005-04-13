@@ -10,7 +10,7 @@ use Finance::Bank::Postbank_de::Account;
 
 use vars qw[ $VERSION ];
 
-$VERSION = '0.20';
+$VERSION = '0.21';
 
 BEGIN {
   Finance::Bank::Postbank_de->mk_accessors(qw( agent login password ));
@@ -68,7 +68,8 @@ sub new_session {
     $agent->form("loginForm");
     eval {
       $agent->current_form->value( accountNumber => $self->login );
-      $agent->current_form->value( PNINumber => $self->password );
+      #$agent->current_form->value( PNINumber => $self->password );
+      $agent->current_form->value( pinNumber => $self->password );
     };
     if ($@) {
       warn $agent->content;
@@ -124,8 +125,8 @@ sub access_denied {
     my $message = $self->error_message;
 
     return (
-        $message =~ m!^\s*Die Kontonummer ist nicht f.r das Internet Online-Banking freigeschaltet. Bitte verwenden Sie zur Freischaltung den Link "Internet Online-Banking freischalten".<br />\s*$!sm
-     or $message =~ m!^\s*Sie haben zu viele Zeichen in das Feld eingegeben.<br />\s*$!sm
+        $message =~ m!^\s*.*?\(anmeldung.login.accountNumber.ktonr-n-vorh.error\)<br />\s*$!sm
+     or $message =~ m!^\s*.*?\(anmeldung.login.accountNumber.checkMaxLen.error\)<br />\s*$!sm
     )
   } else {
     return;
@@ -164,7 +165,9 @@ sub close_session {
   if (not ($self->access_denied or $self->maintenance)) {
     $self->log("Closing session");
     $self->select_function('quit');
-    $result = $self->agent->res->as_string =~ m!<p class="pHeadlineLeft"><span lang="en">Online-Banking</span> beendet</p>!sm;
+    #$result = $self->agent->res->as_string =~ m!<p class="pHeadlineLeft"><span lang="en">Online-Banking</span> beendet</p>!sm;
+    $result = $self->agent->res->as_string =~ m!<legend class="legend"><span lang="en">Online-Banking</span> beendet</legend>!sm;
+    #warn $self->agent->res->as_string;
   } else {
     $result = 'Never logged in';
   };
@@ -179,9 +182,14 @@ sub account_numbers {
 
     $self->log("Getting related account numbers");
     $self->select_function("accountstatement");
-    $self->agent->form("kontoumsatzForm");
+    $self->agent->form("kontoumsatzUmsatzForm");
+    my $f = $self->agent->current_form;
 
-    my $giro_input = $self->agent->current_form->find_input('konto');
+    my $giro_input;
+    if ($f) {
+      $giro_input = $f->find_input('konto');
+    };
+
     if (defined $giro_input) {
       if ($giro_input->type eq 'hidden') {
         @numbers = $giro_input->value();
@@ -189,13 +197,20 @@ sub account_numbers {
       } else {
         @numbers = $giro_input->possible_values();
         $self->log( scalar(@numbers) . " related account numbers found: @numbers");
-      };
+      }
     } else {
-      $self->log("No related account numbers found");
+      # Find the single account number
+      my $c = $self->agent->content;
+      @numbers = ($c =~ /\?konto=(\d+)/g);
+      if (! @numbers) {
+        warn "No account number found!";
+        warn $_ for ($c =~ /(konto)/imsg);
+        $self->log("No related account numbers found");
+      };
     };
 
     # Discard credit card numbers:
-    @numbers = grep /^\d+$/, @numbers;
+    @numbers = grep { /^\d{9,10}$/ } @numbers;
     \@numbers
   };
   @{ $self->{account_numbers} };
@@ -208,7 +223,7 @@ sub get_account_statement {
 
   my $agent = $self->agent();
 
-  $self->agent->form("kontoumsatzForm");
+  $self->agent->form("kontoumsatzUmsatzForm");
   if (exists $args{account_number}) {
     $self->log("Getting account statement for $args{account_number}");
     $agent->current_form->param( konto => [ delete $args{account_number}]);
@@ -304,17 +319,17 @@ Getting account statement via default (9999999999)
 Downloading text version
 Statement date : ????????
 Balance : 5314.05 EUR
-.berweisung;111111/1000000000/37050198 Finanzkasse 3991234 Steuernummer 00703434;Finanzkasse K.ln-S.d;PETRA PFIFFIG;-328.75
-.berweisung;111111/3299999999/20010020 .bertrag auf SparCard 3299999999;Petra Pfiffig;PETRA PFIFFIG;-228.61
-Gutschrift;Bez.ge Pers.Nr. 70600170/01 Arbeitgeber u. Co;PETRA PFIFFIG;Petra Pfiffig;2780.70
+.berweisung;111111/1000000000/37050198 FINANZKASSE 3991234 STEUERNUMMER 00703434;Finanzkasse K.ln-S.d;PETRA PFIFFIG;-328.75
+.berweisung;111111/3299999999/20010020 .BERTRAG AUF SPARCARD 3299999999;Petra Pfiffig;PETRA PFIFFIG;-228.61
+Gutschrift;BEZ.GE PERS.NR. 70600170/01 ARBEITGEBER U. CO;PETRA PFIFFIG;Petra Pfiffig;2780.70
 .berweisung;DA 1000001;Verlagshaus Scribere GmbH;PETRA PFIFFIG;-31.50
-Scheckeinreichung;Eingang vorbehalten Gutbuchung 12345;PETRA PFIFFIG;Ein Fremder;1830.00
-Lastschrift;Miete 600+250 EUR Obj22/328 Schulstr.7, 12345 Meinheim;Eigenheim KG;PETRA PFIFFIG;-850.00
+Scheckeinreichung;EINGANG VORBEHALTEN GUTBUCHUNG 12345;PETRA PFIFFIG;Ein Fremder;1830.00
+Lastschrift;MIETE 600+250 EUR OBJ22/328 SCHULSTR.7, 12345 MEINHEIM;Eigenheim KG;PETRA PFIFFIG;-850.00
 Inh. Scheck;;2000123456789;PETRA PFIFFIG;-75.00
-Lastschrift;Teilnehmernr 1234567 Rundfunk 0103-1203;GEZ;PETRA PFIFFIG;-84.75
-Lastschrift;Rechnung 03121999;Telefon AG Köln;PETRA PFIFFIG;-125.80
-Lastschrift;Stromkosten Kd.Nr.1462347 Jahresabrechnung;Stadtwerke Musterstadt;PETRA PFIFFIG;-580.06
-Gutschrift;Kindergeld Kindergeld-Nr. 1462347;PETRA PFIFFIG;Arbeitsamt Bonn;154.00
+Lastschrift;TEILNEHMERNR 1234567 RUNDFUNK 0103-1203;GEZ;PETRA PFIFFIG;-84.75
+Lastschrift;RECHNUNG 03121999;Telefon AG Köln;PETRA PFIFFIG;-125.80
+Lastschrift;STROMKOSTEN KD.NR.1462347 JAHRESABRECHNUNG;Stadtwerke Musterstadt;PETRA PFIFFIG;-580.06
+Gutschrift;KINDERGELD KINDERGELD-NR. 1462347;PETRA PFIFFIG;Arbeitsamt Bonn;154.00
 Closing session
 Activating (?-xism:^Banking beenden\$)
 EOX
