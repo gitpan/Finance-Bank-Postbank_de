@@ -33,7 +33,12 @@ tie *STDERR, 'Catch', '_STDERR_' or die $!;
 
 SKIP: {
     # A header testing whether we find all prerequisites :
-      # Check for module Finance::Bank::Postbank_de
+      # Check for module Crypt::SSLeay
+  eval { require Crypt::SSLeay };
+  skip "Need module Crypt::SSLeay to run this test", 1
+    if $@;
+
+  # Check for module Finance::Bank::Postbank_de
   eval { require Finance::Bank::Postbank_de };
   skip "Need module Finance::Bank::Postbank_de to run this test", 1
     if $@;
@@ -51,9 +56,10 @@ eval q{
   my $example = sub {
     local $^W = 0;
 
-#line 280 lib/Finance/Bank/Postbank_de.pm
+#line 298 lib/Finance/Bank/Postbank_de.pm
 
   use strict;
+  require Crypt::SSLeay; # It's a prerequisite
   use Finance::Bank::Postbank_de;
   my $account = Finance::Bank::Postbank_de->new(
                 login => '9999999999',
@@ -87,12 +93,17 @@ eval q{
 
   }
 };
-is($@, '', "example from line 280");
+is($@, '', "example from line 298");
 
 };
 SKIP: {
     # A header testing whether we find all prerequisites :
-      # Check for module Finance::Bank::Postbank_de
+      # Check for module Crypt::SSLeay
+  eval { require Crypt::SSLeay };
+  skip "Need module Crypt::SSLeay to run this test", 1
+    if $@;
+
+  # Check for module Finance::Bank::Postbank_de
   eval { require Finance::Bank::Postbank_de };
   skip "Need module Finance::Bank::Postbank_de to run this test", 1
     if $@;
@@ -107,9 +118,10 @@ SKIP: {
     {
     undef $main::_STDOUT_;
     undef $main::_STDERR_;
-#line 280 lib/Finance/Bank/Postbank_de.pm
+#line 298 lib/Finance/Bank/Postbank_de.pm
 
   use strict;
+  require Crypt::SSLeay; # It's a prerequisite
   use Finance::Bank::Postbank_de;
   my $account = Finance::Bank::Postbank_de->new(
                 login => '9999999999',
@@ -142,9 +154,10 @@ SKIP: {
   isa_ok($account,"Finance::Bank::Postbank_de");
   isa_ok($retrieved_statement,"Finance::Bank::Postbank_de::Account");
   $::_STDOUT_ =~ s!^Statement date : \d{8}\n!!m;
+  $::_STDOUT_ =~ s!^Skipping security advice page\n!!m;
   my $expected = <<EOX;
 New Finance::Bank::Postbank_de created
-Connecting to https://banking.postbank.de/
+Connecting to https://banking.postbank.de/app/welcome.do
 Activating (?-xism:^Kontoums.*?tze\$)
 Getting account statement via default (9999999999)
 Downloading text version

@@ -33,7 +33,12 @@ tie *STDERR, 'Catch', '_STDERR_' or die $!;
 
 SKIP: {
     # A header testing whether we find all prerequisites :
-      # Check for module Finance::Bank::Postbank_de::Account
+      # Check for module Crypt::SSLeay
+  eval { require Crypt::SSLeay };
+  skip "Need module Crypt::SSLeay to run this test", 1
+    if $@;
+
+  # Check for module Finance::Bank::Postbank_de::Account
   eval { require Finance::Bank::Postbank_de::Account };
   skip "Need module Finance::Bank::Postbank_de::Account to run this test", 1
     if $@;
@@ -54,6 +59,7 @@ eval q{
 #line 261 lib/Finance/Bank/Postbank_de/Account.pm
 
   use strict;
+  require Crypt::SSLeay; # It's a prerequisite
   use Finance::Bank::Postbank_de::Account;
   my $statement = Finance::Bank::Postbank_de::Account->parse_statement(
                 number => '9999999999',
@@ -79,7 +85,12 @@ is($@, '', "example from line 261");
 };
 SKIP: {
     # A header testing whether we find all prerequisites :
-      # Check for module Finance::Bank::Postbank_de::Account
+      # Check for module Crypt::SSLeay
+  eval { require Crypt::SSLeay };
+  skip "Need module Crypt::SSLeay to run this test", 1
+    if $@;
+
+  # Check for module Finance::Bank::Postbank_de::Account
   eval { require Finance::Bank::Postbank_de::Account };
   skip "Need module Finance::Bank::Postbank_de::Account to run this test", 1
     if $@;
@@ -97,6 +108,7 @@ SKIP: {
 #line 261 lib/Finance/Bank/Postbank_de/Account.pm
 
   use strict;
+  require Crypt::SSLeay; # It's a prerequisite
   use Finance::Bank::Postbank_de::Account;
   my $statement = Finance::Bank::Postbank_de::Account->parse_statement(
                 number => '9999999999',
@@ -195,7 +207,7 @@ eval q{
   my $example = sub {
     local $^W = 0;
 
-#line 414 lib/Finance/Bank/Postbank_de/Account.pm
+#line 415 lib/Finance/Bank/Postbank_de/Account.pm
 
   #!/usr/bin/perl -w
   use strict;
@@ -253,7 +265,7 @@ eval q{
 
   }
 };
-is($@, '', "example from line 414");
+is($@, '', "example from line 415");
 
 };
 SKIP: {
