@@ -1,5 +1,15 @@
 Revision history for Perl extension Finance::Bank::Postbank_de.
 
+0.28 2012xxxx
+  ! Perl 5.6 is now the minimum version, needed for syntax
+  ! Perl 5.8 is needed for the Encode handling
+  ! Major changes to new interface of Postbank.de
+  ! We now decode all strings to UTF-8
+  ! running_total is now formatted as a Perl number, not as a string anymore
+  ! We need WWW::Mechanize v1.52 minimum, because it has the ->form_id method
+  . Files still get stored as CP-1252, Postbank claims these are encoded as UTF-8 :)
+  . Do not upgrade without a working fallback strategy!
+
 0.27 20110728
   - Adjusted to the new Postbank.de certificate/SSL-Cert-Subject
     /1.3.6.1.4.1.311.60.2.1.3=DE/1.3.6.1.4.1.311.60.2.1.1=Bonn/2.5.4.15=Private Organization/serialNumber=HRB6793/C=DE/postalCode=53113/ST=NRW/L=Bonn/streetAddress=Friedrich Ebert Allee 114 126/O=Deutsche Postbank AG/OU=Systems AG/CN=banking.postbank.de

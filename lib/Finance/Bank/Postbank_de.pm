@@ -1,29 +1,31 @@
 package Finance::Bank::Postbank_de;
 
+use 5.006; # we use lexical filehandles now
 use strict;
 use warnings;
 use Carp;
 use base 'Class::Accessor';
-#use LWP::Debug qw(+);
 
 use WWW::Mechanize;
 use Finance::Bank::Postbank_de::Account;
+use Encode qw(decode);
 
 use vars qw[ $VERSION ];
 
-$VERSION = '0.27';
+$VERSION = '0.28';
 
 BEGIN {
   Finance::Bank::Postbank_de->mk_accessors(qw( agent login password urls ));
 };
 
-use constant LOGIN => 'https://banking.postbank.de/app/welcome.do';
+#use constant LOGIN => 'https://banking.postbank.de/app/welcome.do';
+use constant LOGIN => 'https://banking.postbank.de/rai/login';
 
 use vars qw(%functions);
 BEGIN {
   %functions = (
-    quit		=> qr'^Banking beenden$',
-    accountstatement	=> qr'^Kontoums.*?tze$|^Konto<.*?>u</.*?>ms.*?tze$',
+    quit		=> qr':navLogout:',
+    accountstatement	=> qr'umsatzauskunft\.UmsatzauskunftPage',
   );
 };
 
@@ -66,10 +68,10 @@ sub new_session {
       die "Banking unavailable due to maintenance";
     };
     my $agent = $self->agent();
-    $agent->form_name("loginForm");
+    $agent->form_id("id3");
     eval {
-      $agent->current_form->value( accountNumber => $self->login );
-      $agent->current_form->value( pinNumber => $self->password );
+      $agent->current_form->value( nutzername => $self->login );
+      $agent->current_form->value( kennwort => $self->password );
     };
     if ($@) {
       warn $agent->content;
@@ -96,7 +98,6 @@ sub get_login_page {
 
   my $agent = $self->agent();
   $agent->add_header("If-SSL-Cert-Subject" => qr'/1\.3\.6\.1\.4\.1\.311\.60\.2\.1\.3=DE/1\.3\.6\.1\.4\.1\.311\.60\.2\.1\.1=Bonn/2\.5\.4\.15=Private Organization/serialNumber=HRB6793/C=DE/postalCode=53113/ST=NRW/L=Bonn/streetAddress=Friedrich Ebert Allee 114 126/O=Deutsche Postbank AG/OU=Systems AG/CN=banking\.postbank\.de'); 
-  #$agent->add_header("If-SSL-Cert-Subject" => qr{\Q/1.3.6.1.4.1.311.60.2.1.3=DE/2.5.4.15=V1.0, Clause 5.(b)/serialNumber=HRB6793/C=DE/postalCode=53113/ST=NRW/L=Bonn/streetAddress=Friedrich Ebert Allee 114 126/O=Deutsche Postbank AG/OU=Systems AG/CN=banking.postbank.de});
 
   $agent->get(LOGIN);
   $self->log_httpresult();
@@ -117,10 +118,13 @@ sub skip_security_advice {
 };
 
 sub error_page {
-  # Check if an error page is shown (a page with much red on it)
+  # Check if an error page is shown
   my ($self) = @_;
   return unless $self->agent;
-  $self->agent->content =~ m!<h3 class="h3Error">Es ist ein Fehler aufgetreten</h3>!sm
+
+  $self->agent->content =~ m!<p\s+class="form-error">!sm
+      or
+  $self->agent->content =~ m!<p\s+class="field-error">!sm
       or $self->maintenance;
 };
 
@@ -129,7 +133,9 @@ sub error_message {
   return unless $self->agent;
   die "No error condition detected in:\n" . $self->agent->content
     unless $self->error_page;
-  $self->agent->content =~ m!<p class="errorText">(.*?)</p>!sm
+  $self->agent->content =~ m!<p\s+class="form-error">\s*<strong>(.*?)</strong>\s*</p>!sm
+    or
+  $self->agent->content =~ m!<p\s+class="field-error">\s*(.*?)\s*</p>!sm
     or die "No error message found in:\n" . $self->agent->content;
   $1
 };
@@ -150,9 +156,8 @@ sub access_denied {
     return (
          $message =~ m!^Die Kontonummer ist nicht für das Internet Online-Banking freigeschaltet. Bitte verwenden Sie zur Freischaltung den Link "Online-Banking freischalten"\.<br />\s*$!sm
       or $message =~ m!^Sie haben zu viele Zeichen in das Feld eingegeben.<br />\s*$!sm
-      or $message =~ m!^Die Anmeldung ist fehlgeschlagen. Bitte vergewissern Sie sich über die Richtigkeit Ihrer Eingaben und führen Sie den Anmeldevorgang erneut durch.<br />\s*$!sm
-     #   $message =~ m!^\s*.*?\(anmeldung.login.accountNumber.ktonr-n-vorh.error\)<br />\s*$!sm
-     #or $message =~ m!^\s*.*?\(anmeldung.login.accountNumber.checkMaxLen.error\)<br />\s*$!sm
+      or $message =~ m!^Die eingegebene Postbank Girokontonummer ist zu lang. Bitte überprüfen Sie Ihre Eingabe.$!sm
+      or $message =~ m!^Die Anmeldung ist fehlgeschlagen. Bitte vergewissern Sie sich über die Richtigkeit Ihrer Eingaben und führen Sie den Anmeldevorgang erneut durch.\s*$!sm
     )
   } else {
     return;
@@ -168,9 +173,16 @@ sub init_session_urls {
     my ($self) = @_;
     my $agent = $self->agent;
 
-    for (keys %functions) {
-        $self->log( "init_functions: $_ : " . $agent->find_link(text_regex => $functions{ $_ })->url_abs );
-        $self->urls->{$_} = $agent->find_link(text_regex => $functions{ $_ })->url_abs;
+    for my $function (keys %functions) {
+        my $url = $agent->find_link(url_regex => $functions{ $function });
+        if( $url ) {
+            $url = $url->url_abs;
+            $self->log( "init_functions: $function : " . $url );
+            $self->urls->{$function} = $url;
+        } else {
+            warn "No URL found for function $function - website may have changed";
+            croak $agent->content;
+        };
     };
 };
 
@@ -192,8 +204,9 @@ sub close_session {
   if (not ($self->access_denied or $self->maintenance)) {
     $self->log("Closing session");
     $self->select_function('quit');
-    $result = $self->agent->res->as_string =~ m!<p class="pHeadlineLeft"><span lang="en">Online-Banking</span> beendet</p>!sm
-      #or warn $self->agent->content;
+    #$result = $self->agent->res->as_string =~ m!<p class="important">\s*<strong>Sie haben sich beim Postbank Online-Banking abgemeldet.</strong>\s*</p>!sm
+    $result = $self->agent->content =~ m!<p class="important">\s*<strong>Sie haben sich beim Postbank Online-Banking abgemeldet.</strong>\s*</p>!sm
+      or warn $self->agent->content;
   } else {
     $result = 'Never logged in';
   };
@@ -204,87 +217,103 @@ sub close_session {
 sub account_numbers {
   my ($self,%args) = @_;
   $self->{account_numbers} ||= do {
-    my @numbers;
+    my %numbers;
 
     $self->log("Getting related account numbers");
     $self->select_function("accountstatement");
 
     my $giro_input;
-    my $f = $self->agent->form_name("kontoumsatzUmsatzForm");
+    my $f = $self->agent->form_with_fields("selectForm:kontoauswahl");
     if ($f) {
-      $giro_input = $f->find_input('konto');
+      $giro_input = $f->find_input('selectForm:kontoauswahl');
     };
 
     if (defined $giro_input) {
       if ($giro_input->type eq 'hidden') {
-        @numbers = $giro_input->value();
-        $self->log("Only one related account number found: @numbers");
+        %numbers = { $giro_input->value() => 0 };
+        warn "Account with only one account number found. Please show me the HTML :-(";
+        $self->log("Only one related account number found: %numbers");
       } else {
-        @numbers = $giro_input->possible_values();
+        # Unfortunately, the input only lists the account numbers
+        # in the text and not as HTML values...
+        my @check_numbers = $giro_input->possible_values();
+        my @numbers = $self->agent->content =~ /<option[^>]*?value="(\d+)"[^>]*>\s*(\d+)\s+/gi;
+        if( 0+@numbers != 2*(0+@check_numbers)) {
+            warn "Inconsistent number of accounts found. Maybe the website has changed.";
+            warn sprintf "Found %d (%s), expected %d numbers.", 
+                 0+@numbers,
+                 join( ",", @numbers),
+                 0+@check_numbers;
+            #warn $self->agent->content,"\n";
+        };
+        while (@numbers) {
+            my ($v,$k) = splice @numbers, 0, 2;
+            $numbers{ $k } = $v;
+        };
         $self->log( scalar(@numbers) . " related account numbers found: @numbers");
       }
     } else {
       # Find the single account number
+      warn "No account number found - guessing. Maybe the website has changed.";
       my $c = $self->agent->content;
-      @numbers = ($c =~ /\?konto=(\d+)/g);
+      my @numbers = ($c =~ /\?konto=(\d+)/g);
       if (! @numbers) {
         warn "No account number found!";
         warn $_ for ($c =~ /(konto)/imsg);
         $self->log("No related account numbers found");
+      } else {
+        %numbers = (@numbers, 0);
       };
     };
 
     # Discard credit card numbers:
-    @numbers = grep { /^\d{9,10}$/ } @numbers;
-    \@numbers
+    for (keys %numbers) {
+        delete $numbers{ $_ } if $_ !~ /^\d{9,10}$/;
+    };
+    \%numbers
   };
-  @{ $self->{account_numbers} };
+  keys %{ $self->{account_numbers} };
 };
 
 sub get_account_statement {
   my ($self,%args) = @_;
 
-  #warn "*** Entry: $args{account_number}";
-  #for my $l ($self->agent->links) {
-      #next unless $l->text =~ /konto/i;
-      #warn "ACCT: " . $l->text. "\t" . $l->url;
-  #};
   #Umsatzauskunft aktualisieren
   if (! $self->select_function("accountstatement")) {
       $self->log("Error selecting accountstatement");
       $self->log_httpresult();
-      #die;
       return;
   };
 
   my $agent = $self->agent();
 
   my $f;
-  if (! ($f = $self->agent->form_name("kontoumsatzUmsatzForm"))) {
+  if (! ($f = $self->agent->form_with_fields('selectForm:kontoauswahl', 'selectForm:kontoauswahlButton'))) {
       $self->log_httpresult();
       return;
   };
+  $agent->form_with_fields( 'selectForm:kontoauswahl' );
   if (exists $args{account_number}) {
     $self->log("Getting account statement for $args{account_number}");
-    $agent->current_form->param( konto => [ delete $args{account_number}]);
+    # Load the account numbers if not already loaded
+    $self->account_numbers;
+    if(! exists $self->{account_numbers}->{$args{account_number}}) {
+        croak "Unknown account number '$args{account_number}'";
+    };
+    my $index = $self->{account_numbers}->{$args{account_number}};
+    $agent->current_form->param( 'selectForm:kontoauswahl' => $index );
   } else {
-    my @accounts = $agent->current_form->value('konto');
+    my @accounts = $agent->current_form->value('selectForm:kontoauswahl');
     $self->log("Getting account statement via default (@accounts)");
   };
 
-  $f->value('zeitraum','tage');
-  $f->param('tage',['90']);
-
   $self->log("Downloading text version");
-  $agent->click('action');
+  $agent->click('selectForm:kontoauswahlButton');
 
-  my $l = $agent->find_link(text_regex => qr'Download Kontoums.*?tze');
-  #my $u = $l->url_abs;
-  #$u =~ s/cache=true\&//i;
-  #$l->[0] = $u;
-  #warn $l->url_abs;
+  my $response;
+  my $l = $agent->find_link(text_regex => qr'CSV herunterladen');
   if ($l) {
-    $agent->get($l);
+    $response = $agent->get($l);
     $self->log_httpresult();
   } else {
     # keine Umsaetze
@@ -292,23 +321,32 @@ sub get_account_statement {
     return ();
   };
 
-  if ($args{file}) {
+  my $encoding = $response->header('Content-Type');
+
+  # We save the raw response
+  my $content = $response->content;
+
+  if ($args{file} and $agent->status == 200) {
     $self->log("Saving to $args{file}");
-    local *F;
-    open F, "> $args{file}"
+    open my $fh, "> $args{file}"
       or croak "Couldn't create '$args{file}' : $!";
-    print F $agent->content
+    binmode $fh;
+    print {$fh} $content
       or croak "Couldn't write to '$args{file}' : $!";
-    close F
+    close $fh
       or croak "Couldn't close '$args{file}' : $!";;
   };
 
+  # The encoding says UTF-8, but the wire says it's CP-1252 ...
+  $content = $response->decoded_content(charset => 'CP-1252');
+  #$content =~ s!([^\x00-\x7f])!sprintf "{U+%04x}", ord($1)!ge;
+  #warn $content;
   if ($agent->status == 200) {
-    my $result = $agent->content;
+    my $result = $content;
+    # Result is in UTF-8
     return Finance::Bank::Postbank_de::Account->parse_statement(content => $result);
   } else {
     $self->log("Got status ".$agent->status);
-    #warn $agent->status;
     return wantarray ? () : undef;
   };
 };

@@ -14,13 +14,15 @@ Edit Makefile.PL if you want to install the module anyway"
 WriteMakefile(
     'NAME'    => 'Finance::Bank::Postbank_de',
     'VERSION_FROM'  => 'lib/Finance/Bank/Postbank_de.pm', # finds $VERSION
-    'PREREQ_PM'    => { 'WWW::Mechanize' => 1.30,
+    'PREREQ_PM'    => { 'WWW::Mechanize' => 1.52,
                         'Test::More' => 0,
                         'Test::MockObject' => 0,
                         'Class::Accessor' => 0,
                         'MIME::Lite' => 3.00,
                         'List::Sliding::Changes' => 0.02,
+                        'Encode' => 0, # for decoding the content and dealing with umlauts
                       }, # e.g., Module::Name => 1.1
+    MIN_PERL_VERSION => 5.00800, # 5.8 for Encode, 5.6 for the syntax
     ($] >= 5.005 ?    ## Add these new keywords supported since 5.005
       (ABSTRACT_FROM => 'lib/Finance/Bank/Postbank_de.pm', # retrieve abstract from module
        AUTHOR     => 'Max Maischein <corion@cpan.org>') : ()),
