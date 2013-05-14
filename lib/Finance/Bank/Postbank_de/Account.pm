@@ -9,7 +9,7 @@ use base 'Class::Accessor';
 
 use vars qw[ $VERSION %tags %totals %columns %safety_check ];
 
-$VERSION = '0.28';
+$VERSION = '0.29';
 
 BEGIN {
   Finance::Bank::Postbank_de::Account->mk_accessors(qw( number balance balance_unavailable balance_prev transactions_future iban blz account_type name));
@@ -156,11 +156,13 @@ sub parse_statement {
     my ($method,$balance);
     for my $total (@{ $totals{ $self->account_type }||[] }) {
       my ($re,$possible_method) = @$total;
-      if ($line =~ /$re;\s*(\S+)\s*\x{20AC}$/) {
+      if ($line =~ /$re;\s*(?:(\S+)\s*\x{20AC}|(null))$/) {
         $method = $possible_method;
-        $balance = $1;
+        $balance = $1 || $2;
         if ($balance =~ /^(-?[0-9.,]+)\s*$/) {
           $self->$method( ['????????',$self->parse_amount($balance)]);
+        } elsif ('null' eq $balance) {
+          $self->$method( ['????????',$self->parse_amount("0,00")]);
         } else {
           die "Invalid number '$balance' found for $method";
         };
@@ -273,6 +275,9 @@ sub trade_dates {
 
 1;
 __END__
+
+=encoding ISO8859-1
+
 =head1 NAME
 
 Finance::Bank::Postbank_de::Account - Postbank bank account class
