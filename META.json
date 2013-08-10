@@ -45,5 +45,10 @@
       }
    },
    "release_status" : "stable",
-   "version" : "0.30"
+   "resources" : {
+      "repository" : {
+         "url" : "https://github.com/Corion/Finance-Bank-Postbank_de"
+      }
+   },
+   "version" : "0.31"
 }
