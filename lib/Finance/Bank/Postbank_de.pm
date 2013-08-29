@@ -12,7 +12,7 @@ use Encode qw(decode);
 
 use vars qw[ $VERSION ];
 
-$VERSION = '0.31';
+$VERSION = '0.32';
 
 BEGIN {
   Finance::Bank::Postbank_de->mk_accessors(qw( agent login password urls ));
@@ -24,8 +24,8 @@ use constant LOGIN => 'https://banking.postbank.de/rai/login';
 use vars qw(%functions);
 BEGIN {
   %functions = (
-    quit		=> qr':navLogout:',
-    accountstatement	=> qr'umsatzauskunft\.UmsatzauskunftPage',
+    quit		=> [ text_regex => qr'Banking beenden' ],
+    accountstatement	=> [ text_regex => qr'Ums.tze' ],
   );
 };
 
@@ -174,7 +174,7 @@ sub init_session_urls {
     my $agent = $self->agent;
 
     for my $function (keys %functions) {
-        my $url = $agent->find_link(url_regex => $functions{ $function });
+        my $url = $agent->find_link(@{$functions{ $function }});
         if( $url ) {
             $url = $url->url_abs;
             $self->log( "init_functions: $function : " . $url );
@@ -351,6 +351,13 @@ sub get_account_statement {
   };
 };
 
+sub unread_messages {
+    my( $self )= @_;
+    if(  $self->agent->content() =~ m!\bclass="messageboxCounterId">\s*(\d+)\s*</b>!s) {
+        return "$1";
+    }
+}
+
 1;
 __END__
 
@@ -515,6 +522,11 @@ be retrieved from the agent, but this will most likely change, as the print vers
 of the account statement is not a navigable page. The result of the function
 is either undef or a Finance::Bank::Postbank_de::Account object.
 
+=head2 $account->unread_messages
+
+Returns the number of unread messages. There is no way
+to retrieve the messages themselves yet.
+
 =head2 session_timed_out
 
 Returns true if our banking session timed out.
@@ -527,6 +539,7 @@ Returns true if the banking interface is currently unavailable due to maintenanc
 
   * Add even more runtime tests to validate the HTML
   * Streamline the site access to use even less bandwidth
+  * Use a proper HTML parser, like HTML::TreeBuilder
 
 =head1 AUTHOR
 
