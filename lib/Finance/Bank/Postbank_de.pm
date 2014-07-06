@@ -13,7 +13,7 @@ use Mozilla::CA;
 
 use vars qw[ $VERSION ];
 
-$VERSION = '0.33';
+$VERSION = '0.34';
 
 BEGIN {
   Finance::Bank::Postbank_de->mk_accessors(qw( agent login password urls ));
@@ -78,7 +78,8 @@ sub new_session {
       warn $agent->content;
       croak $@;
     };
-    $agent->submit;
+    #$agent->submit;
+    $agent->click('loginButton');
     $self->log_httpresult();
     $result = $agent->status;
 
@@ -208,6 +209,7 @@ sub close_session {
     $self->select_function('quit');
     #$result = $self->agent->res->as_string =~ m!<p class="important">\s*<strong>Sie haben sich beim Postbank Online-Banking abgemeldet.</strong>\s*</p>!sm
     $result = $self->agent->content =~ m!<p class="important">\s*<strong>Sie haben sich beim Postbank Online-Banking abgemeldet.</strong>\s*</p>!sm
+      or $result = $self->agent->content =~ m!<p class="important">\s*<strong>\s*Diese Funktion steht auf Grund einer technischen St.rung derzeit leider nicht zur Verf.gung.*</strong>\s*</p>!sm # Testumgebung...
       or warn $self->agent->content;
   } else {
     $result = 'Never logged in';
@@ -256,7 +258,7 @@ sub account_numbers {
       }
     } else {
       # Find the single account number
-      warn "No account number found - guessing. Maybe the website has changed.";
+      $self->log( "No account number found - guessing. Maybe the website has changed." );
       my $c = $self->agent->content;
       my @numbers = ($c =~ /\?konto=(\d+)/g);
       if (! @numbers) {
